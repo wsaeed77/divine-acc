@@ -15,6 +15,10 @@ class ClientTaskSyncService
      */
     public function syncForClient(Client $client): void
     {
+        if ($client->is_prospect) {
+            return;
+        }
+
         $client->load([
             'accountsReturn',
             'confirmationStatement',

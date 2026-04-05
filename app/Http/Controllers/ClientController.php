@@ -9,6 +9,9 @@ use App\Models\CompanyDetail;
 use App\Models\CompanyStatus;
 use App\Models\ContactTitle;
 use App\Models\FlatRateCategory;
+use App\Models\Language;
+use App\Models\MaritalStatus;
+use App\Models\Nationality;
 use App\Models\PayeFrequency;
 use App\Models\SicCode;
 use App\Models\TaxOffice;
@@ -129,13 +132,24 @@ class ClientController extends Controller
         $clientData['tenant_id'] = $tenantId;
         $clientData['created_by_id'] = $user->id;
         $clientData['is_active'] = true;
+        if (! array_key_exists('is_prospect', $clientData)) {
+            $clientData['is_prospect'] = true;
+        }
 
-        DB::transaction(function () use ($request, $clientData, $companyData) {
-            $client = Client::query()->create($clientData);
-            CompanyDetail::query()->create(array_merge($companyData, ['client_id' => $client->id]));
-            $this->clientExtendedData->bootstrapForNewClient($client);
-            $this->clientExtendedData->syncFromRequest($request, $client);
+        $client = DB::transaction(function () use ($request, $clientData, $companyData) {
+            $created = Client::query()->create($clientData);
+            CompanyDetail::query()->create(array_merge($companyData, ['client_id' => $created->id]));
+            $this->clientExtendedData->bootstrapForNewClient($created);
+            $this->clientExtendedData->syncFromRequest($request, $created);
+
+            return $created;
         });
+
+        if ($request->boolean('onboarding_workflow')) {
+            return redirect()->route('clients.show', $client)
+                ->with('success', 'Client created. Continue onboarding using tasks and compliance sections.')
+                ->with('onboarding', true);
+        }
 
         return redirect()->route('clients.index')->with('success', 'Client created.');
     }
@@ -173,6 +187,11 @@ class ClientController extends Controller
                 'manager_id' => $client->manager_id,
                 'credit_check_completed' => $client->credit_check_completed,
                 'credit_check_date' => $client->credit_check_date?->format('Y-m-d'),
+                'income_details' => $client->income_details,
+                'previous_accountant_name' => $client->previous_accountant_name,
+                'previous_accountant_details' => $client->previous_accountant_details,
+                'other_details' => $client->other_details,
+                'is_prospect' => $client->is_prospect,
             ],
             'clientTypes' => ClientType::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'partnerOptions' => $this->partnerUserOptions($tenantId),
@@ -237,6 +256,11 @@ class ClientController extends Controller
             'partner_id' => ['nullable', 'integer', $userRule],
             'manager_id' => ['nullable', 'integer', $userRule],
             'credit_check_date' => ['nullable', 'date'],
+            'income_details' => ['nullable', 'string', 'max:65535'],
+            'previous_accountant_name' => ['nullable', 'string', 'max:255'],
+            'previous_accountant_details' => ['nullable', 'string', 'max:65535'],
+            'other_details' => ['nullable', 'string', 'max:65535'],
+            'is_prospect' => ['sometimes', 'boolean'],
             'company' => ['nullable', 'array'],
             'company.company_number' => ['nullable', 'string', 'max:20'],
             'company.company_status_id' => ['nullable', 'exists:lkp_company_statuses,id'],
@@ -270,6 +294,11 @@ class ClientController extends Controller
             'manager_id' => $validated['manager_id'] ?? null,
             'credit_check_completed' => $creditDone,
             'credit_check_date' => $creditDone ? ($validated['credit_check_date'] ?? null) : null,
+            'income_details' => $validated['income_details'] ?? null,
+            'previous_accountant_name' => $validated['previous_accountant_name'] ?? null,
+            'previous_accountant_details' => $validated['previous_accountant_details'] ?? null,
+            'other_details' => $validated['other_details'] ?? null,
+            'is_prospect' => (bool) ($validated['is_prospect'] ?? true),
         ];
 
         return ['client' => $client, 'company' => $company];
@@ -373,6 +402,9 @@ class ClientController extends Controller
             'paye_frequencies' => PayeFrequency::query()->orderBy('name')->get(['id', 'name']),
             'flat_rate_categories' => FlatRateCategory::query()->orderBy('name')->get(['id', 'name', 'rate']),
             'vat_member_states' => VatMemberState::query()->orderBy('name')->get(['id', 'name', 'code']),
+            'marital_statuses' => MaritalStatus::query()->orderBy('name')->get(['id', 'name']),
+            'nationalities' => Nationality::query()->orderBy('name')->get(['id', 'name']),
+            'languages' => Language::query()->orderBy('name')->get(['id', 'name']),
         ];
     }
 

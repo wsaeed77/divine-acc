@@ -1,8 +1,8 @@
 # Divinne Accountancy Software — Requirements Document
 
 **Module:** Task Management
-**Version:** 1.2
-**Date:** 26 March 2026
+**Version:** 1.3
+**Date:** 5 April 2026
 
 ---
 
@@ -10,6 +10,7 @@
 
 1. [Overview](#1-overview)
 2. [Scope](#2-scope)
+2.1 [Bright Manager — automated task generation (reference)](#21-bright-manager--automated-task-generation-reference)
 3. [Task Types & Generation Rules](#3-task-types--generation-rules)
 4. [Functional Requirements](#4-functional-requirements)
 5. [Task List View — Field Specifications](#5-task-list-view--field-specifications)
@@ -44,6 +45,85 @@ Tasks track compliance deadlines, are assigned to staff, and progress through ac
 - Recurring task generation (monthly, quarterly, annual)
 
 **Out of scope (this phase):** Manual/ad-hoc tasks, time tracking against tasks, invoicing from tasks.
+
+---
+
+## 2.1 Bright Manager — automated task generation (reference)
+
+This section aligns Divinne’s requirements with **Bright Manager** behaviour as described in *BrightManager Docs* (overview, task automation, deadlines). It is the canonical reference for **what** tasks represent and **when** they may be created; Section 3 maps this to **task types** in this product.
+
+### Prospect clients — no tasks on creation
+
+| Bright Manager | Divinne |
+|----------------|---------|
+| On **client creation**, the client is initially a **prospect**; **no automated tasks** are created until the engagement is confirmed. | Implemented via `clients.is_prospect`. While `is_prospect` is **true**, `ClientTaskSyncService::syncForClient()` **returns without creating tasks**. Users clear prospect by checking **“Confirmed client — enable automated tasks”** on the client form. |
+
+Existing clients migrated to the database default to **non-prospect** (`is_prospect = false`) so current behaviour is preserved unless the field is set.
+
+### Primary services → standard work (summary)
+
+| Service (Bright Manager) | Typical automated work / task theme |
+|--------------------------|-------------------------------------|
+| Accounts | Prepare, review, file accounts |
+| VAT | Collect data, calculate, submit |
+| Payroll | Salary processing, reporting |
+| Bookkeeping | Record transactions |
+| CT600 | Tax calculation & filing |
+| Management Accounts | Prepare and send interim financial reports |
+| Confirmation Statement | Review officers/share capital, submit to Companies House |
+| CIS / P11D | Monthly CIS returns / annual benefits reporting |
+
+### Detailed service triggers (Bright Manager)
+
+| Service selection | Generated task theme | How deadlines / rhythm work (Bright Manager) |
+|--------------------|----------------------|-----------------------------------------------|
+| **Accounts** and/or **CT600 Return** | Tasks for **Accounts** and/or **Accounts/CT600** | Uses **Accounts Period End**; statutory deadline often **9 months** after period end (Companies House); may chase client for records after period end. |
+| **Bookkeeping** | Recurring **Bookkeeping** | **Monthly or quarterly**; supports records, reconciliation, before VAT/accounts deadlines. |
+| **Payroll** and/or **Auto-Enrolment** | Recurring **Payroll** + pension compliance (e.g. declaration of compliance) | Uses **PAYE frequency** and **First Pay Date** to time processing. |
+| **VAT Returns** | **VAT Return** | Uses **VAT frequency** and **VAT period end**; filing deadline typically **1 calendar month + 7 days** after period end; may email client for records at period end. |
+| **Management Accounts** | Recurring **Management Accounts** | **Monthly or quarterly** interim reporting. |
+| **Confirmation Statement** | **Confirmation Statement** (e.g. CS01) | Uses **confirmation statement due** date; annual review of officers, share capital, PSCs before filing. |
+| **CIS** or **P11D** | **CIS Returns** (often monthly) / **P11D** (annual) | CIS aligned to statutory deadlines (e.g. monthly cycle); P11D e.g. **6 July** filing context for benefits in kind. |
+
+### Statutory anchors and deadline logic (Bright Manager)
+
+**A. Services with fixed or recurring legal deadlines**
+
+| Area | Final / typical deadline | Anchor date(s) on client | Task chain (conceptual) |
+|------|---------------------------|---------------------------|-------------------------|
+| **Accounts** | Often **9 months** after accounts period end (Companies House context) | Accounts period end | Request records → follow-up → prepare → review → approval → file |
+| **CT600** | Filing **12 months** after period end; payment **9 months + 1 day** after period end | HMRC / accounting period end | Request data → prepare CT600 → review → submit |
+| **Confirmation Statement** | **Annually** (e.g. 12 months after last statement) | Confirmation statement date / due | Request info → review → submit |
+| **Bookkeeping** | Recurring (monthly/weekly) | Firm-defined (e.g. month-end) | Collect → record → reconcile |
+
+**B. Services that need configuration before tasks fully apply**
+
+| Area | Notes | Anchor inputs |
+|------|--------|----------------|
+| **Payroll** | Tasks strengthen after **First Pay Date**, **frequency**, **RTI** context | First pay date, PAYE frequency, RTI deadline |
+| **Auto-Enrolment** | Driven by **staging**, **re-enrolment**, **declaration of compliance** | Staging date, compliance due |
+| **VAT** | Deadlines from **period end** + **frequency** | VAT period end, VAT frequency |
+| **Management Accounts** | Recurring **monthly/quarterly** | Reporting period end |
+
+**C. Other statutory patterns (Bright Manager)**
+
+| Area | Pattern |
+|------|---------|
+| **CIS** | Monthly; typical filing **19th** of following month (contextual). |
+| **P11D** | Filing **6 July** annual; payment **22 July** if applicable; tax year ends **5 April**. |
+
+**D. Task offsets (Bright Manager)**  
+Final deadlines are computed from **anchor dates**; **sub-tasks** or checklist steps may be scheduled **relative** to the filing date (e.g. request records −30 days, prepare −15 days, review −7 days, submit on deadline). Divinne may model these via **task breakdown / templates** (Section 7) and future **target-date** rules.
+
+### Implementation mapping in Divinne (current)
+
+| Bright Manager idea | Divinne implementation |
+|---------------------|------------------------|
+| Prospect → no tasks | `is_prospect` on `clients`; `ClientTaskSyncService` no-op when true |
+| One task type per service area | `lkp_task_types` linked to `services`; `syncForClient` creates missing **active** tasks per enabled service |
+| Deadlines from client fields | `deadline_source` on task types (e.g. `accounts_returns.accounts_period_end`); manual types leave deadline blank |
+| VAT 1m + 7d, CIS 19th, P11D July | **Target:** extend `ClientTaskSyncService::resolveDeadline()` / date helpers; **current:** user-entered or stored dates on compliance sections |
+| Accounts + CT600 combined workflow | Separate task types (**Accounts Preparation**, **CH Submission**, **CT600**) with related **accounts_returns** fields; optional future **combined** label in UI |
 
 ---
 
@@ -96,7 +176,8 @@ Tasks are generated based on the services enabled in the client's **Services Req
 
 | ID | Requirement |
 |----|-------------|
-| FR-TM-01.1 | When a service is toggled ON for a client, the system shall automatically create the corresponding task(s) upon saving the client record. |
+| FR-TM-01.0 | **Bright Manager alignment:** Automated tasks shall **not** be created for **prospect** clients (`clients.is_prospect = true`). When the client is **confirmed** (not a prospect), service-based task sync may run. |
+| FR-TM-01.1 | When a service is toggled ON for a **non-prospect** client, the system shall automatically create the corresponding task(s) upon saving the client record. |
 | FR-TM-01.2 | Task names shall follow the naming pattern defined per task type (see Section 3.1). Task names are editable after creation. |
 | FR-TM-01.3 | For tasks with auto-populated deadlines, the deadline shall be derived from the client's compliance detail fields. |
 | FR-TM-01.4 | For tasks with manually-entered deadlines (PAYE, VAT, Self Assessment, Pension), the deadline field shall be left blank and must be set by the user. |

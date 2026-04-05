@@ -31,4 +31,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    | Companies House API (company profile lookup). Register at:
+    | https://developer.company-information.service.gov.uk/
+    */
+    'companies_house' => [
+        'api_key' => env('COMPANIES_HOUSE_API_KEY'),
+    ],
+
 ];

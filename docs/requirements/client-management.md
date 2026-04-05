@@ -1,8 +1,8 @@
 # Divinne Accountancy Software — Requirements Document
 
 **Module:** Client Management
-**Version:** 1.0
-**Date:** 26 March 2026
+**Version:** 1.1
+**Date:** 5 April 2026
 
 ---
 
@@ -15,7 +15,8 @@
 5. [Business Rules & Validation](#5-business-rules--validation)
 6. [User Roles & Permissions](#6-user-roles--permissions)
 7. [UI Sections & Field Mapping](#7-ui-sections--field-mapping)
-8. [Future Modules (Out of Scope)](#8-future-modules-out-of-scope)
+8. [Bright Manager parity & UI behaviour](#8-bright-manager-parity--ui-behaviour)
+9. [Future Modules (Out of Scope)](#9-future-modules-out-of-scope)
 
 ---
 
@@ -63,8 +64,8 @@ This document covers **Client Management** only. The following is in scope:
 
 | ID | Requirement |
 |----|-------------|
-| FR-02.1 | Each client shall have optional company details including company number, status, incorporation date, and addresses. |`c bm                                                 
-| FR-02.2 | The system shall support an "Autofill with Companies House" feature to pre-populate company details from Companies House API (future integration point). |
+| FR-02.1 | Each client shall have optional company details including company number, status, incorporation date, and addresses. |
+| FR-02.2 | The system shall support an **Autofill with Companies House** control that pre-populates company details from the official Companies House API using a configured API key (`COMPANIES_HOUSE_API_KEY`). |
 | FR-02.3 | Invoice address shall be selectable as Registered Address, Postal Address, or a Custom address. |
 | FR-02.4 | SIC codes shall be selectable from a pre-loaded lookup table. |
 
@@ -168,6 +169,33 @@ This document covers **Client Management** only. The following is in scope:
 |----|-------------|
 | FR-13.1 | Each client shall be assignable to one Partner and one Manager from the users table. |
 | FR-13.2 | Partner and Manager dropdowns shall show only users with the appropriate role. |
+
+### FR-14: Supplementary onboarding fields (Bright Manager sections)
+
+| ID | Requirement |
+|----|-------------|
+| FR-14.1 | The system shall store **income details**, **previous accountant** (name and notes), and **other details** on the client record for onboarding context. |
+| FR-14.2 | The system shall support a **secondary contact** as a second person linked to the client (non–main contact row on `client_contacts`). |
+
+### FR-15: Companies House autofill
+
+| ID | Requirement |
+|----|-------------|
+| FR-15.1 | Where configured, the user shall trigger a lookup by company number to populate company fields from the Companies House API. |
+
+### FR-16: Create client — onboarding continuation
+
+| ID | Requirement |
+|----|-------------|
+| FR-16.1 | On create, the user shall choose between saving only or **saving and continuing into onboarding** (e.g. redirect to client view or tasks with context). |
+
+### FR-17: Prospect vs confirmed client (task generation)
+
+| ID | Requirement |
+|----|-------------|
+| FR-17.1 | New clients shall default to **prospect** (`is_prospect = true`) until the user confirms the engagement. |
+| FR-17.2 | While **prospect**, the system shall **not** run automated task generation for enabled services (Bright Manager behaviour). |
+| FR-17.3 | The user shall be able to mark the client as **confirmed** (not a prospect), after which task sync may create tasks from enabled services. |
 
 ---
 
@@ -573,7 +601,58 @@ The New Client form is organised into **13 collapsible sections**. Each section 
 
 ---
 
-## 8. Future Modules (Out of Scope)
+## 8. Bright Manager parity & UI behaviour
+
+This section records **parity expectations** against Bright Manager, informed by the product comparison document (BrightManager Docs). It supplements Sections 3 and 7: where the specification already listed a field, **implementation** may have lagged the spec; where Bright Manager uses **dynamic tabs** or **nested forms**, we describe the target behaviour.
+
+### 8.1 Required information & company
+
+| Topic | Target behaviour |
+|-------|------------------|
+| **Companies House autofill** | A control beside company number calls the Companies House REST API and fills registered address, incorporation date, company status (where mappable), SIC where possible, and suggests the registered company name. Requires `COMPANIES_HOUSE_API_KEY`. |
+| **Internal reference** | Single field: unique internal code with optional auto-generation on create (Section 7.2). |
+
+### 8.2 Contacts
+
+| Topic | Target behaviour |
+|-------|------------------|
+| **Main contact** | Full AML/ID actions, Photo ID verified, Address verified, marital status, nationality, preferred language, previous address, deceased date, terms signed, Companies House personal code — all stored on `contacts` / pivot per Section 7.4. |
+| **Secondary contact** | A second person linked to the client (`client_contacts` with `is_main_contact = 0`), same field set as main where applicable (without main-only pivot flags such as self-assessment fee on the secondary row unless product later requires it). |
+
+### 8.3 Income, previous accountant, other details
+
+| Section | Purpose |
+|---------|---------|
+| **Income details** | Free-text / structured capture of client income context for the practice (stored on `clients` for this phase — see migration). |
+| **Previous accountant** | Name and notes for the prior adviser. |
+| **Other details** | Catch-all notes for onboarding context. |
+
+### 8.4 Services, pricing, and service-driven UI
+
+| Topic | Target behaviour |
+|-------|------------------|
+| **Services & fees** | Master list with per-service toggle and fee; drives task templates via existing task sync (see `task-management.md`). |
+| **Combined pricing** | Annual and monthly charges with toggles; should be editable **below** the service list (or in the same logical block). Optional **sum of selected service fees** can be applied to annual charge to mirror Bright Manager’s derived totals. |
+| **Service-linked panels** | In Bright Manager, selecting certain services exposes additional **tabs** (e.g. **Staff tasks** / **Staff task monitor** — task nature; **Agent authorisation** when CT600 / VAT / Payroll / CIS are selected; **Management accounts** when that service is selected). **Target:** surface the same concepts in-app: link to tasks where relevant, show agent-authorisation / 64-8 context near registration, and label Management Accounts when the service is on. Full tab-for-tab cloning may be phased; task workflows are covered in the Task Management module. |
+
+### 8.5 Compliance sections & visibility
+
+| Topic | Target behaviour |
+|-------|------------------|
+| **Accounts & returns / CT600** | All `accounts_returns` fields including CT600 due, tax amounts, payment reference, and progress fields (Section 7.6). CT600-related fields should appear **grouped** under a clear CT600 / corporation tax label in the UI. |
+| **PAYE vs Auto-enrolment / P11D** | In Bright Manager, AE and P11D sit **inside** the PAYE area as subordinate forms. **Target:** present Auto-enrolment and P11D **nested under** the PAYE section (may remain separate scroll areas but visually grouped). |
+| **CIS** | CIS detail form should be **emphasised when the CIS service** is selected (Bright Manager creates CIS context with that service). |
+
+### 8.6 Create client actions
+
+| Action | Target behaviour |
+|--------|------------------|
+| **Add client** | Standard save to client list or show. |
+| **Add and create onboarding workflow** | Save the client then take the user to the **next step for onboarding** (e.g. client show with onboarding hint, or tasks view filtered for that client) so practice staff can continue setup immediately. |
+
+---
+
+## 9. Future Modules (Out of Scope)
 
 The following modules are planned for future phases and will extend the database schema:
 

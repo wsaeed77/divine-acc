@@ -84,11 +84,13 @@ class ClientExtendedDataService
         ])->values()->all();
 
         $mainContact = $client->contacts->firstWhere(fn ($c) => (bool) $c->pivot->is_main_contact);
+        $secondaryContact = $client->contacts->first(fn ($c) => ! (bool) $c->pivot->is_main_contact);
 
         return [
             'combined_pricing' => $this->mapCombinedPricing($client->combinedPricing),
             'services' => $services,
             'main_contact' => $mainContact ? $this->mapContact($mainContact) : $this->emptyMainContact(),
+            'secondary_contact' => $secondaryContact ? $this->mapSecondaryContact($secondaryContact) : $this->emptySecondaryContact(),
             'accounts_returns' => $this->mapAccountsReturn($client->accountsReturn),
             'confirmation_statement' => $this->mapConfirmationStatement($client->confirmationStatement),
             'vat' => $this->mapVatDetail($client->vatDetail),
@@ -124,6 +126,7 @@ class ClientExtendedDataService
             ],
             'services' => $services,
             'main_contact' => $this->emptyMainContact(),
+            'secondary_contact' => $this->emptySecondaryContact(),
             'accounts_returns' => $this->emptyAccountsReturnsForm(),
             'confirmation_statement' => $this->emptyConfirmationStatementForm(),
             'vat' => $this->emptyVatForm(),
@@ -221,6 +224,11 @@ class ClientExtendedDataService
                 $this->syncMainContact($client, $tenantId, $validated['main_contact']);
             }
 
+            if (isset($validated['secondary_contact'])) {
+                $mainId = $client->fresh()->contacts->firstWhere(fn ($c) => (bool) $c->pivot->is_main_contact)?->id;
+                $this->syncSecondaryContact($client, $tenantId, $validated['secondary_contact'], $mainId);
+            }
+
             $this->clientTaskSync->syncForClient($client->fresh());
         });
     }
@@ -245,13 +253,26 @@ class ClientExtendedDataService
             'last_name' => $last !== '' ? $last : '—',
             'preferred_name' => $data['preferred_name'] ?: null,
             'date_of_birth' => $data['date_of_birth'] ?: null,
+            'deceased_date' => $data['deceased_date'] ?: null,
             'email' => $data['email'] ?: null,
             'portal_login_email' => $data['portal_login_email'] ?: null,
             'postal_address' => $data['postal_address'] ?: null,
+            'previous_address' => $data['previous_address'] ?: null,
             'telephone_number' => $data['telephone_number'] ?: null,
             'mobile_number' => $data['mobile_number'] ?: null,
             'ni_number' => $data['ni_number'] ?: null,
             'personal_utr' => $data['personal_utr'] ?: null,
+            'companies_house_personal_code' => $data['companies_house_personal_code'] ?: null,
+            'terms_signed_date' => $data['terms_signed_date'] ?: null,
+            'photo_id_verified' => (bool) ($data['photo_id_verified'] ?? false),
+            'address_verified' => (bool) ($data['address_verified'] ?? false),
+            'marital_status_id' => $data['marital_status_id'] ?: null,
+            'nationality_id' => $data['nationality_id'] ?: null,
+            'language_id' => $data['language_id'] ?: null,
+            'aml_check_started' => (bool) ($data['aml_check_started'] ?? false),
+            'aml_check_date' => $data['aml_check_date'] ?: null,
+            'id_check_started' => (bool) ($data['id_check_started'] ?? false),
+            'id_check_date' => $data['id_check_date'] ?: null,
         ];
 
         if (! empty($data['id'])) {
@@ -272,6 +293,94 @@ class ClientExtendedDataService
         ];
 
         DB::table('client_contacts')->where('client_id', $client->id)->update(['is_main_contact' => false]);
+
+        if ($client->contacts()->where('contacts.id', $contact->id)->exists()) {
+            $client->contacts()->updateExistingPivot($contact->id, $pivot);
+        } else {
+            $client->contacts()->attach($contact->id, $pivot);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function syncSecondaryContact(Client $client, int $tenantId, array $data, ?int $mainContactId): void
+    {
+        $first = trim((string) ($data['first_name'] ?? ''));
+        $last = trim((string) ($data['last_name'] ?? ''));
+
+        $existingId = ! empty($data['id']) ? (int) $data['id'] : null;
+
+        if ($first === '' && $last === '') {
+            if ($existingId) {
+                $existing = Contact::query()
+                    ->where('tenant_id', $tenantId)
+                    ->whereKey($existingId)
+                    ->first();
+                if ($existing && (int) $existing->id !== (int) $mainContactId) {
+                    $client->contacts()->detach($existing->id);
+                }
+            }
+
+            return;
+        }
+
+        $payload = [
+            'tenant_id' => $tenantId,
+            'title_id' => $data['title_id'] ?: null,
+            'first_name' => $first !== '' ? $first : '—',
+            'middle_name' => $data['middle_name'] ?: null,
+            'last_name' => $last !== '' ? $last : '—',
+            'preferred_name' => $data['preferred_name'] ?: null,
+            'date_of_birth' => $data['date_of_birth'] ?: null,
+            'deceased_date' => $data['deceased_date'] ?: null,
+            'email' => $data['email'] ?: null,
+            'portal_login_email' => $data['portal_login_email'] ?: null,
+            'postal_address' => $data['postal_address'] ?: null,
+            'previous_address' => $data['previous_address'] ?: null,
+            'telephone_number' => $data['telephone_number'] ?: null,
+            'mobile_number' => $data['mobile_number'] ?: null,
+            'ni_number' => $data['ni_number'] ?: null,
+            'personal_utr' => $data['personal_utr'] ?: null,
+            'companies_house_personal_code' => $data['companies_house_personal_code'] ?: null,
+            'terms_signed_date' => $data['terms_signed_date'] ?: null,
+            'photo_id_verified' => (bool) ($data['photo_id_verified'] ?? false),
+            'address_verified' => (bool) ($data['address_verified'] ?? false),
+            'marital_status_id' => $data['marital_status_id'] ?: null,
+            'nationality_id' => $data['nationality_id'] ?: null,
+            'language_id' => $data['language_id'] ?: null,
+            'aml_check_started' => (bool) ($data['aml_check_started'] ?? false),
+            'aml_check_date' => $data['aml_check_date'] ?: null,
+            'id_check_started' => (bool) ($data['id_check_started'] ?? false),
+            'id_check_date' => $data['id_check_date'] ?: null,
+        ];
+
+        if ($existingId) {
+            $contact = Contact::query()
+                ->where('tenant_id', $tenantId)
+                ->whereKey($existingId)
+                ->firstOrFail();
+            if ((int) $contact->id === (int) $mainContactId) {
+                return;
+            }
+            $contact->update($payload);
+        } else {
+            $contact = Contact::query()->create($payload);
+        }
+
+        $pivot = [
+            'is_main_contact' => false,
+            'create_self_assessment' => false,
+            'self_assessment_fee' => null,
+            'client_does_own_sa' => false,
+        ];
+
+        $others = $client->contacts()->where('contacts.id', '!=', $contact->id)->get();
+        foreach ($others as $o) {
+            if (! $o->pivot->is_main_contact) {
+                $client->contacts()->detach($o->id);
+            }
+        }
 
         if ($client->contacts()->where('contacts.id', $contact->id)->exists()) {
             $client->contacts()->updateExistingPivot($contact->id, $pivot);
@@ -307,6 +416,26 @@ class ClientExtendedDataService
      */
     private function mapContact(Contact $c): array
     {
+        return array_merge($this->mapContactCore($c), [
+            'create_self_assessment' => (bool) $c->pivot->create_self_assessment,
+            'self_assessment_fee' => $c->pivot->self_assessment_fee,
+            'client_does_own_sa' => (bool) $c->pivot->client_does_own_sa,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapSecondaryContact(Contact $c): array
+    {
+        return $this->mapContactCore($c);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapContactCore(Contact $c): array
+    {
         return [
             'id' => $c->id,
             'title_id' => $c->title_id ? (string) $c->title_id : '',
@@ -315,16 +444,26 @@ class ClientExtendedDataService
             'last_name' => $c->last_name,
             'preferred_name' => $c->preferred_name,
             'date_of_birth' => $c->date_of_birth?->format('Y-m-d'),
+            'deceased_date' => $c->deceased_date?->format('Y-m-d'),
             'email' => $c->email,
             'portal_login_email' => $c->portal_login_email,
             'postal_address' => $c->postal_address,
+            'previous_address' => $c->previous_address,
             'telephone_number' => $c->telephone_number,
             'mobile_number' => $c->mobile_number,
             'ni_number' => $c->ni_number,
             'personal_utr' => $c->personal_utr,
-            'create_self_assessment' => (bool) $c->pivot->create_self_assessment,
-            'self_assessment_fee' => $c->pivot->self_assessment_fee,
-            'client_does_own_sa' => (bool) $c->pivot->client_does_own_sa,
+            'companies_house_personal_code' => $c->companies_house_personal_code,
+            'terms_signed_date' => $c->terms_signed_date?->format('Y-m-d'),
+            'photo_id_verified' => (bool) $c->photo_id_verified,
+            'address_verified' => (bool) $c->address_verified,
+            'marital_status_id' => $c->marital_status_id ? (string) $c->marital_status_id : '',
+            'nationality_id' => $c->nationality_id ? (string) $c->nationality_id : '',
+            'language_id' => $c->language_id ? (string) $c->language_id : '',
+            'aml_check_started' => (bool) $c->aml_check_started,
+            'aml_check_date' => $c->aml_check_date?->format('Y-m-d'),
+            'id_check_started' => (bool) $c->id_check_started,
+            'id_check_date' => $c->id_check_date?->format('Y-m-d'),
         ];
     }
 
@@ -332,6 +471,26 @@ class ClientExtendedDataService
      * @return array<string, mixed>
      */
     private function emptyMainContact(): array
+    {
+        return array_merge($this->emptyContactCore(), [
+            'create_self_assessment' => false,
+            'self_assessment_fee' => '',
+            'client_does_own_sa' => false,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptySecondaryContact(): array
+    {
+        return $this->emptyContactCore();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyContactCore(): array
     {
         return [
             'id' => null,
@@ -341,16 +500,26 @@ class ClientExtendedDataService
             'last_name' => '',
             'preferred_name' => '',
             'date_of_birth' => '',
+            'deceased_date' => '',
             'email' => '',
             'portal_login_email' => '',
             'postal_address' => '',
+            'previous_address' => '',
             'telephone_number' => '',
             'mobile_number' => '',
             'ni_number' => '',
             'personal_utr' => '',
-            'create_self_assessment' => false,
-            'self_assessment_fee' => '',
-            'client_does_own_sa' => false,
+            'companies_house_personal_code' => '',
+            'terms_signed_date' => '',
+            'photo_id_verified' => false,
+            'address_verified' => false,
+            'marital_status_id' => '',
+            'nationality_id' => '',
+            'language_id' => '',
+            'aml_check_started' => false,
+            'aml_check_date' => '',
+            'id_check_started' => false,
+            'id_check_date' => '',
         ];
     }
 
@@ -937,6 +1106,48 @@ class ClientExtendedDataService
             'main_contact.create_self_assessment' => ['boolean'],
             'main_contact.self_assessment_fee' => ['nullable', 'numeric', 'min:0'],
             'main_contact.client_does_own_sa' => ['boolean'],
+            'main_contact.deceased_date' => ['nullable', 'date'],
+            'main_contact.previous_address' => ['nullable', 'string', 'max:5000'],
+            'main_contact.companies_house_personal_code' => ['nullable', 'string', 'max:20'],
+            'main_contact.terms_signed_date' => ['nullable', 'date'],
+            'main_contact.photo_id_verified' => ['boolean'],
+            'main_contact.address_verified' => ['boolean'],
+            'main_contact.marital_status_id' => ['nullable', 'exists:lkp_marital_statuses,id'],
+            'main_contact.nationality_id' => ['nullable', 'exists:lkp_nationalities,id'],
+            'main_contact.language_id' => ['nullable', 'exists:lkp_languages,id'],
+            'main_contact.aml_check_started' => ['boolean'],
+            'main_contact.aml_check_date' => ['nullable', 'date'],
+            'main_contact.id_check_started' => ['boolean'],
+            'main_contact.id_check_date' => ['nullable', 'date'],
+
+            'secondary_contact' => ['nullable', 'array'],
+            'secondary_contact.id' => ['nullable', 'integer', $existsContact],
+            'secondary_contact.title_id' => ['nullable', 'exists:lkp_titles,id'],
+            'secondary_contact.first_name' => ['nullable', 'string', 'max:100'],
+            'secondary_contact.middle_name' => ['nullable', 'string', 'max:100'],
+            'secondary_contact.last_name' => ['nullable', 'string', 'max:100'],
+            'secondary_contact.preferred_name' => ['nullable', 'string', 'max:100'],
+            'secondary_contact.date_of_birth' => ['nullable', 'date'],
+            'secondary_contact.deceased_date' => ['nullable', 'date'],
+            'secondary_contact.email' => ['nullable', 'email', 'max:255'],
+            'secondary_contact.portal_login_email' => ['nullable', 'email', 'max:255'],
+            'secondary_contact.postal_address' => ['nullable', 'string', 'max:5000'],
+            'secondary_contact.previous_address' => ['nullable', 'string', 'max:5000'],
+            'secondary_contact.telephone_number' => ['nullable', 'string', 'max:30'],
+            'secondary_contact.mobile_number' => ['nullable', 'string', 'max:30'],
+            'secondary_contact.ni_number' => ['nullable', 'string', 'max:15'],
+            'secondary_contact.personal_utr' => ['nullable', 'string', 'max:20'],
+            'secondary_contact.companies_house_personal_code' => ['nullable', 'string', 'max:20'],
+            'secondary_contact.terms_signed_date' => ['nullable', 'date'],
+            'secondary_contact.photo_id_verified' => ['boolean'],
+            'secondary_contact.address_verified' => ['boolean'],
+            'secondary_contact.marital_status_id' => ['nullable', 'exists:lkp_marital_statuses,id'],
+            'secondary_contact.nationality_id' => ['nullable', 'exists:lkp_nationalities,id'],
+            'secondary_contact.language_id' => ['nullable', 'exists:lkp_languages,id'],
+            'secondary_contact.aml_check_started' => ['boolean'],
+            'secondary_contact.aml_check_date' => ['nullable', 'date'],
+            'secondary_contact.id_check_started' => ['boolean'],
+            'secondary_contact.id_check_date' => ['nullable', 'date'],
 
             'accounts_returns' => ['nullable', 'array'],
             'accounts_returns.accounts_period_end' => ['nullable', 'date'],

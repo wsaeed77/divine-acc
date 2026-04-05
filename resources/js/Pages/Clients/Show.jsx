@@ -42,6 +42,23 @@ export default function Show({ client, extended, canDelete }) {
                 </div>
             )}
 
+            {flash?.onboarding && (
+                <div className="mb-6 rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-950 ring-1 ring-sky-100">
+                    Onboarding: review tasks and compliance sections for this client. Open{' '}
+                    <Link href="/tasks" className="font-medium underline">
+                        Tasks
+                    </Link>{' '}
+                    to continue workflow setup.
+                </div>
+            )}
+
+            {client.is_prospect && (
+                <div className="mb-6 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 ring-1 ring-amber-100">
+                    This record is a <strong>prospect</strong>. Automated tasks are not generated until you
+                    edit the client and enable &quot;Confirmed client — enable automated tasks&quot;.
+                </div>
+            )}
+
             <div className="mb-6 flex flex-wrap items-center gap-3">
                 <Link href={`/clients/${client.id}/edit`} className="btn-primary">
                     Edit client

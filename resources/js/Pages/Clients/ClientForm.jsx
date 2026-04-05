@@ -1,5 +1,5 @@
 import { Link, useForm, usePage } from '@inertiajs/react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import ClientExtendedSections from './ClientExtendedSections';
 
 function emptyCompany() {
@@ -70,13 +70,25 @@ export default function ClientForm({
         credit_check_date: client?.credit_check_date
             ? String(client.credit_check_date).slice(0, 10)
             : '',
+        income_details: client?.income_details ?? '',
+        previous_accountant_name: client?.previous_accountant_name ?? '',
+        previous_accountant_details: client?.previous_accountant_details ?? '',
+        other_details: client?.other_details ?? '',
+        is_prospect: client?.is_prospect !== undefined ? !!client.is_prospect : true,
+        onboarding_workflow: false,
         company: { ...emptyCompany(), ...initialCompany },
         ...(initialExtended ?? {}),
     });
 
-    const submit = (e) => {
+    const [chMessage, setChMessage] = useState(null);
+    const [chLoading, setChLoading] = useState(false);
+
+    const c = form.data.company;
+
+    const submit = (e, onboardingWorkflow = false) => {
         e.preventDefault();
         const opts = { preserveScroll: true };
+        form.transform((data) => ({ ...data, onboarding_workflow: !!onboardingWorkflow }));
         if (mode === 'create') {
             form.post('/clients', opts);
         } else {
@@ -84,14 +96,41 @@ export default function ClientForm({
         }
     };
 
-    const c = form.data.company;
+    const autofillCompaniesHouse = async () => {
+        setChMessage(null);
+        const num = String(c.company_number ?? '').trim();
+        if (!num) {
+            setChMessage('Enter a company number first.');
+            return;
+        }
+        setChLoading(true);
+        try {
+            const { data } = await window.axios.post('/lookup/companies-house', {
+                company_number: num,
+            });
+            if (data.suggested_name && !String(form.data.name ?? '').trim()) {
+                form.setData('name', data.suggested_name);
+            }
+            if (data.company) {
+                form.setData('company', { ...form.data.company, ...data.company });
+            }
+            setChMessage('Loaded from Companies House.');
+        } catch (err) {
+            setChMessage(err.response?.data?.message ?? 'Companies House lookup failed.');
+        } finally {
+            setChLoading(false);
+        }
+    };
 
     const setCompany = (key, value) => {
         form.setData('company', { ...form.data.company, [key]: value });
     };
 
     return (
-        <form onSubmit={submit} className="space-y-8">
+        <form
+            onSubmit={(e) => submit(e, false)}
+            className="space-y-8"
+        >
             <details open className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
                 <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
                     Required information
@@ -181,6 +220,25 @@ export default function ClientForm({
                             )}
                         </div>
                     )}
+                    <div className="rounded-lg bg-slate-50 px-4 py-3 ring-1 ring-slate-200/80">
+                        <label className="flex items-start gap-3">
+                            <input
+                                type="checkbox"
+                                className="mt-1 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                checked={!form.data.is_prospect}
+                                onChange={(e) => form.setData('is_prospect', !e.target.checked)}
+                            />
+                            <span>
+                                <span className="text-sm font-medium text-slate-900">
+                                    Confirmed client — enable automated tasks
+                                </span>
+                                <span className="mt-1 block text-xs text-slate-600">
+                                    Bright Manager does not create tasks for prospects. Tick this when the
+                                    engagement is confirmed so tasks can sync from enabled services.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
                     <div className="flex flex-wrap items-center gap-6">
                         <label className="flex items-center gap-2">
                             <input
@@ -241,20 +299,29 @@ export default function ClientForm({
                     Company details
                 </summary>
                 <div className="grid gap-5 px-6 py-6 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                        <p className="text-sm text-slate-600">
-                            Companies House autofill can be wired in a later release.
-                        </p>
+                    <div className="sm:col-span-2 flex flex-wrap items-end gap-3">
+                        <div className="min-w-[12rem] flex-1">
+                            <label className="label-field">Company number</label>
+                            <input
+                                type="text"
+                                className="input-field"
+                                value={c.company_number}
+                                onChange={(e) => setCompany('company_number', e.target.value)}
+                                placeholder="e.g. 12345678"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            className="btn-secondary shrink-0"
+                            disabled={chLoading}
+                            onClick={autofillCompaniesHouse}
+                        >
+                            {chLoading ? 'Looking up…' : 'Autofill from Companies House'}
+                        </button>
                     </div>
-                    <div>
-                        <label className="label-field">Company number</label>
-                        <input
-                            type="text"
-                            className="input-field"
-                            value={c.company_number}
-                            onChange={(e) => setCompany('company_number', e.target.value)}
-                        />
-                    </div>
+                    {chMessage && (
+                        <p className="sm:col-span-2 text-sm text-slate-600">{chMessage}</p>
+                    )}
                     <div>
                         <label className="label-field">Company status</label>
                         <select
@@ -430,6 +497,74 @@ export default function ClientForm({
                 </div>
             </details>
 
+            <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
+                <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
+                    Income details
+                </summary>
+                <div className="px-6 py-6">
+                    <label htmlFor="income_details" className="label-field">
+                        Income details
+                    </label>
+                    <textarea
+                        id="income_details"
+                        rows={4}
+                        className="input-field"
+                        value={form.data.income_details}
+                        onChange={(e) => form.setData('income_details', e.target.value)}
+                    />
+                </div>
+            </details>
+
+            <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
+                <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
+                    Previous accountant
+                </summary>
+                <div className="grid gap-4 px-6 py-6 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                        <label htmlFor="previous_accountant_name" className="label-field">
+                            Name
+                        </label>
+                        <input
+                            id="previous_accountant_name"
+                            type="text"
+                            className="input-field"
+                            value={form.data.previous_accountant_name}
+                            onChange={(e) => form.setData('previous_accountant_name', e.target.value)}
+                        />
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label htmlFor="previous_accountant_details" className="label-field">
+                            Details
+                        </label>
+                        <textarea
+                            id="previous_accountant_details"
+                            rows={3}
+                            className="input-field"
+                            value={form.data.previous_accountant_details}
+                            onChange={(e) => form.setData('previous_accountant_details', e.target.value)}
+                        />
+                    </div>
+                </div>
+            </details>
+
+            <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
+                <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
+                    Other details
+                </summary>
+                <div className="px-6 py-6">
+                    <label htmlFor="other_details" className="label-field">
+                        Other details
+                    </label>
+                    <textarea
+                        id="other_details"
+                        rows={4}
+                        className="input-field"
+                        value={form.data.other_details}
+                        onChange={(e) => form.setData('other_details', e.target.value)}
+                    />
+                </div>
+            </details>
+
             {extendedLookups && (
                 <ClientExtendedSections form={form} lookups={extendedLookups} />
             )}
@@ -438,9 +573,21 @@ export default function ClientForm({
                 <Link href="/clients" className="btn-secondary">
                     Cancel
                 </Link>
-                <button type="submit" className="btn-primary" disabled={form.processing}>
-                    {form.processing ? 'Saving…' : mode === 'create' ? 'Create client' : 'Save changes'}
-                </button>
+                <div className="flex flex-wrap justify-end gap-3">
+                    {mode === 'create' && (
+                        <button
+                            type="button"
+                            className="btn-secondary"
+                            disabled={form.processing}
+                            onClick={(e) => submit(e, true)}
+                        >
+                            {form.processing ? 'Saving…' : 'Create and continue onboarding'}
+                        </button>
+                    )}
+                    <button type="submit" className="btn-primary" disabled={form.processing}>
+                        {form.processing ? 'Saving…' : mode === 'create' ? 'Create client' : 'Save changes'}
+                    </button>
+                </div>
             </div>
         </form>
     );

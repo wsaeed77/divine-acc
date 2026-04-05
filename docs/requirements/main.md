@@ -450,10 +450,11 @@ Based on Bright Manager's navigation, the top nav bar shall include:
 
 > **Full specification:** `docs/requirements/task-management.md`
 
-**Summary:** Automated task generation driven by client services, with full progress tracking, assignment, and compliance deadline management.
+**Summary:** Automated task generation driven by client services, with full progress tracking, assignment, and compliance deadline management. Aligns with Bright Manager: **prospect clients** do not receive automated tasks until confirmed (see `task-management.md` §2.1).
 
 **Key Features:**
-- 14 task types auto-generated from enabled client services
+- **Prospect gate:** no task sync while `clients.is_prospect` is true
+- 14 task types auto-generated from enabled client services (non-prospect)
 - Recurring task cycle: one active task at a time, auto-increments on completion
 - Task edit form: assignee, monitor, notify on progress, time estimate, breakdown checklists, templates, description
 - Target date (auto-calculated or manually set) and Deadline date (auto-populated or manual)

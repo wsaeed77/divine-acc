@@ -1,0 +1,42 @@
+# Deploy Laravel to EC2 on push to main (or manual run).
+#
+# Required GitHub repository secrets:
+#   EC2_HOST      — public IP or DNS (e.g. 51.20.255.190)
+#   EC2_SSH_KEY   — full private key contents (PEM), same as your .pem file
+# Optional:
+#   EC2_USER      — SSH user (defaults to ec2-user in remote-deploy.sh if unset)
+
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rsync and run server deploy
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.EC2_HOST }}
+          DEPLOY_USER: ${{ secrets.EC2_USER }}
+        run: |
+          if [ -z "${SSH_PRIVATE_KEY:-}" ] || [ -z "${DEPLOY_HOST:-}" ]; then
+            echo "Missing EC2_SSH_KEY or EC2_HOST repository secrets." >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -t ed25519,rsa -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          bash deploy/remote-deploy.sh

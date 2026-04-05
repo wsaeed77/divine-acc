@@ -22,12 +22,18 @@ class Client extends Model
         'credit_check_date',
         'created_by_id',
         'is_active',
+        'income_details',
+        'previous_accountant_name',
+        'previous_accountant_details',
+        'other_details',
+        'is_prospect',
     ];
 
     protected $casts = [
         'credit_check_completed' => 'boolean',
         'credit_check_date' => 'date',
         'is_active' => 'boolean',
+        'is_prospect' => 'boolean',
     ];
 
     public function tenant(): BelongsTo

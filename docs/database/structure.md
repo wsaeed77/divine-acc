@@ -219,6 +219,11 @@ The central entity — one row per client (company or individual).
 | credit_check_completed | TINYINT(1) | DEFAULT 0 | Has credit check been done? |
 | credit_check_date | DATE | NULL | Date credit check was completed |
 | is_active | TINYINT(1) | DEFAULT 1 | Soft delete |
+| income_details | TEXT | NULL | Optional onboarding notes (Bright Manager) |
+| previous_accountant_name | VARCHAR(255) | NULL | |
+| previous_accountant_details | TEXT | NULL | |
+| other_details | TEXT | NULL | |
+| is_prospect | TINYINT(1) | DEFAULT 0 | If true, automated tasks are not generated (Bright Manager prospect) |
 | created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | |
 | updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE | |
 
