@@ -63,6 +63,17 @@ class ClientTaskSyncService
             ->get();
 
         foreach ($taskTypes as $type) {
+            if ($type->recurrence === 'one_off') {
+                $alreadyExists = Task::query()
+                    ->where('client_id', $client->id)
+                    ->where('task_type_id', $type->id)
+                    ->exists();
+
+                if ($alreadyExists) {
+                    continue;
+                }
+            }
+
             $hasActive = Task::query()
                 ->where('client_id', $client->id)
                 ->where('task_type_id', $type->id)

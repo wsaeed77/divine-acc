@@ -43,6 +43,26 @@ class Task extends Model
         'completed_at' => 'datetime',
     ];
 
+    /**
+     * @var array<int, string>
+     */
+    protected $appends = [
+        'is_overdue',
+    ];
+
+    public function getIsOverdueAttribute(): bool
+    {
+        if (! in_array($this->status, ['active', 'switched_off'], true)) {
+            return false;
+        }
+
+        if ($this->deadline_date === null) {
+            return false;
+        }
+
+        return $this->deadline_date->copy()->startOfDay()->lt(now()->startOfDay());
+    }
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);

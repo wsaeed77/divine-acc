@@ -1,8 +1,8 @@
 # Divinne Accountancy Software — Requirements Document
 
 **Module:** Task Management
-**Version:** 1.3
-**Date:** 5 April 2026
+**Version:** 1.5
+**Date:** 29 March 2026
 
 ---
 
@@ -18,7 +18,9 @@
 7. [Deadline & Date Rules](#7-deadline--date-rules)
 8. [Task Completion Behaviour](#8-task-completion-behaviour)
 9. [Service Toggle-Off Behaviour](#9-service-toggle-off-behaviour)
-10. [Remaining Questions](#10-remaining-questions)
+10. [Task lifecycle, overdue, completion & dependencies](#10-task-lifecycle-overdue-completion--dependencies-product-rules)
+11. [Implementation alignment (current build)](#11-implementation-alignment-current-build)
+12. [Remaining Questions](#12-remaining-questions)
 
 ---
 
@@ -230,7 +232,7 @@ Tasks are generated based on the services enabled in the client's **Services Req
 | FR-TM-06.3 | **Target Date** is auto-calculated by default. A **"Manually Set Target Date"** toggle allows the user to override and enter a custom target date. |
 | FR-TM-06.4 | **Deadline** = the statutory/external due date (e.g., HMRC filing deadline, Companies House deadline). Auto-populated where possible, otherwise manually entered (see Section 3.3). |
 | FR-TM-06.5 | Both dates shall be inline-editable in the task list view. |
-| FR-TM-06.6 | Tasks with Deadline in the past shall be visually highlighted (overdue indicator). |
+| FR-TM-06.6 | Tasks with **deadline before today** (and not completed) shall be treated as **overdue**: visual highlight, optional **“Overdue”** label, surfaced on **Dashboard** and task list (see §10). |
 
 ### FR-TM-07: Task Breakdown & Checklists
 
@@ -399,6 +401,8 @@ Task marked as "Complete"
                  with incremented dates
 ```
 
+> **Implementation (v1.5):** Steps 3–4 are handled by **`TaskCompletionService`** when a task is marked complete: compliance dates are rolled per task type (see §8.2), the task is set to **completed**, then **`ClientTaskSyncService::syncForClient`** runs to create the next active task where recurrence allows. **One-off** task types (e.g. Auto-Enrolment staging) do not get a second row after completion. Manual-deadline types without populated dates may still get a new task with blank deadlines until the user updates the client record.
+
 ### 8.2 Client Date Updates on Completion
 
 | Task Type | Client Field(s) Updated |
@@ -445,7 +449,83 @@ Service ON  →  Task created (active)
 
 ---
 
-## 10. Remaining Questions
+## 10. Task lifecycle, overdue, completion & dependencies (product rules)
+
+This section records **how tasks behave with time and events** (including Bright Manager–style expectations). It complements Sections 7–9.
+
+### 10.1 When the task deadline has passed (“overdue”)
+
+| Rule | Behaviour |
+|------|------------|
+| **Latest action / workflow** | The task **does not** auto-complete, auto-delete, or stop the workflow when the deadline passes. Staff continue to update **Latest Action** until work is done. |
+| **Overdue vs status** | **Overdue** is a **date-driven** condition: deadline date is **before today** (calendar), and the task is still **active** (or **switched off** but not completed). It is **not** a separate stored status value. |
+| **Visual / lists** | Overdue tasks are indicated in the **task list** (highlight + “Overdue” label) and on the **Dashboard** (overdue summary + link to filter). |
+| **Staff workload** | A dedicated **staff workload** screen is **not** implemented yet; overdue tasks are visible per assignee via the task list and dashboard. |
+| **Notifications** | **Email reminders** and **in-app alerts** for overdue work are **configuration / future work** — not automatic in the current build unless extended (e.g. queued notifications, mail). |
+| **Managers / admins** | Visibility of delayed work is via **shared task list** and **dashboard**; **reports** of overdue tasks are **not** implemented yet. |
+| **Chained workflows (e.g. CT600)** | Multiple task types for one client (e.g. Accounts, CT600) are **pre-created** when services are enabled — see §10.2. If one task is overdue, others are **not** auto-blocked in software today; **business risk** (penalties, late fees) is out of band. |
+| **Pre-created sequences** | If Task 2 already exists, an overdue Task 1 does **not** remove Task 2; both can appear overdue independently if their deadlines pass. |
+
+### 10.2 When a task is marked completed
+
+| Rule | Behaviour |
+|------|------------|
+| **Status** | Task **status** → `completed`; **completed_at** / **completed_by** stored. Task leaves **active** lists and appears under **Completed** filter. |
+| **History / activity** | Full **audit / activity log** per task (beyond `task_history` table) is **partially** modelled; completion does not yet append a structured history row everywhere. |
+| **Next tasks — Case A (pre-created, most common)** | For each **service**, the product creates **one active task per task type** when the client is confirmed and the service is on (`ClientTaskSyncService`). **All** those tasks can exist at once (e.g. Accounts + CT600). Completing Task 1 does **not** “unlock” Task 2 in code — Task 2 **already exists** and remains active until completed. |
+| **Next tasks — Case B (dynamic / step-by-step)** | **Not** implemented as a separate engine. Any **step order** is a **process** matter; future **task dependencies** (see §10.4) could enforce blocking. |
+| **Notifications** | **Clients**: not automatically notified on task completion in the current build (future: email / portal). **Staff**: dashboard + task list; optional **Notify on progress** user is stored on the task but **delivery** (email vs in-app) is **not** wired end-to-end yet. |
+
+### 10.3 Manual actions on tasks
+
+Supported (see Section 6 / FR-TM-03–09): **reassign** (assignee, monitor, notify user), **edit deadlines and targets**, **progress notes**, **latest action**, **favourites**. **Escalate / prioritise** as explicit flags is **not** implemented — can be represented via assignee + notes + deadline.
+
+### 10.4 Task dependencies
+
+| Concept | Product direction |
+|--------|-------------------|
+| **Prerequisites** | Example: “Prepare Accounts” after “Records Received” — **logical** dependencies are described here; **no** `task_depends_on_task_id` (or similar) exists in the database yet. |
+| **Blocked / delayed** | Could be represented by **Latest Action** and **deadline**; automatic blocking of dependent tasks is **future work**. |
+
+### 10.5 Client dependency impact
+
+Delays because the client has not supplied documents can cause tasks to become **overdue**; **automated reminders to clients** are **not** implemented unless added (mail, portal, integrations).
+
+### 10.6 Status vs deadline
+
+| Principle | Implementation |
+|-----------|----------------|
+| **Independent** | **Latest Action** (and task **status** for active / completed / switched off) is **independent** of deadline. |
+| **Pending but overdue** | Allowed: e.g. Latest Action = “Records requested” while **Overdue** is true. |
+| **Late completion** | Allowed: task can be **completed** after the deadline; overdue flag no longer applies once **completed**. |
+
+### 10.7 Recurring tasks
+
+| Principle | Implementation |
+|-----------|----------------|
+| **Next period** | Requirements (§3.2, §8): when a recurring task completes, **next period** task should be generated and **client** next-due fields rolled forward. |
+| **Current build** | On **complete**, `TaskCompletionService` rolls compliance fields (where dates exist) and `ClientTaskSyncService` creates the next task for that type. Tasks are also synced when **client services** are saved. **Risk:** completing one of several tasks that share the same date field (e.g. accounts period) advances that field once per completion — firms should align process. Backlog if a new cycle is generated before prior work is finished remains a **process** concern. |
+
+---
+
+## 11. Implementation alignment (current build)
+
+| Area | Spec / rule | Current implementation |
+|------|-------------|-------------------------|
+| Overdue definition | Deadline before today, task not completed | **`Task::is_overdue`** accessor; task list + dashboard use same date rule |
+| Overdue UI | Dashboard, task lists | **Dashboard:** overdue count + list + link. **Tasks:** row style + “Overdue” badge; **“Overdue only”** filter (`?overdue=1`) |
+| No auto-complete when overdue | — | **No** cron changes status; matches |
+| Completion | Moves to completed list | **`TaskController::complete`** sets `status=completed`, timestamps |
+| Next-period / rollover | On complete, next task + client dates | **`TaskCompletionService`** rolls dates per task type, then **`ClientTaskSyncService::syncForClient`** creates the next active task |
+| Pre-created tasks | One per enabled task type per client | **Yes** — sync creates missing active tasks per type |
+| Dependencies | Blocked until prerequisite | **Not** in DB / UI — **gap** |
+| Notifications | Email / dashboard | **Dashboard** list only; **email** not implemented for tasks — **gap** |
+| Staff workload view | Per–staff load | **Not** a separate page — **gap** (list filter by assignee future) |
+| Task history | Activity log | **`task_history` table** exists; **not** populated on every change — **partial** |
+
+---
+
+## 12. Remaining Questions
 
 > **Minor clarifications to finalise.**
 
@@ -466,4 +546,4 @@ Is this a read-only calculated field showing the total of all service fees for t
 
 ---
 
-*End of Document — Awaiting answers to remaining minor questions before database structure.*
+*End of document — Section 12 lists minor open questions; Section 11 tracks build vs spec.*

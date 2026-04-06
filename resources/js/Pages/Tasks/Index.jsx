@@ -49,6 +49,19 @@ export default function Index({ tasks, filters }) {
                 >
                     Completed
                 </Link>
+                {filters.status !== 'completed' && (
+                    <Link
+                        href={filters.overdue ? '/tasks?status=open' : '/tasks?status=open&overdue=1'}
+                        className={
+                            filters.overdue
+                                ? 'btn-primary text-sm py-1.5 px-3'
+                                : 'btn-secondary text-sm py-1.5 px-3'
+                        }
+                        preserveScroll
+                    >
+                        Overdue only
+                    </Link>
+                )}
             </div>
 
             <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
@@ -77,21 +90,22 @@ export default function Index({ tasks, filters }) {
                                 tasks.data.map((task) => (
                                     <tr
                                         key={task.id}
-                                        className={
-                                            task.deadline_date &&
-                                            new Date(task.deadline_date) < new Date() &&
-                                            task.status === 'active'
-                                                ? 'bg-amber-50/80'
-                                                : ''
-                                        }
+                                        className={task.is_overdue ? 'bg-amber-50/80' : ''}
                                     >
                                         <td className="px-4 py-3">
                                             <div className="font-medium text-slate-900">{task.task_name}</div>
-                                            {task.status === 'switched_off' && (
-                                                <span className="mt-1 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-900">
-                                                    Service off
-                                                </span>
-                                            )}
+                                            <div className="mt-1 flex flex-wrap gap-1.5">
+                                                {task.is_overdue && (
+                                                    <span className="inline-block rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900">
+                                                        Overdue
+                                                    </span>
+                                                )}
+                                                {task.status === 'switched_off' && (
+                                                    <span className="inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-900">
+                                                        Service off
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-4 py-3">
                                             <Link

@@ -6,6 +6,7 @@ use App\Models\ActionStatus;
 use App\Models\BreakdownTemplate;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\TaskCompletionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -39,6 +40,11 @@ class TaskController extends Controller
             $query->visibleInList();
         }
 
+        if ($request->boolean('overdue') && $status !== 'completed') {
+            $query->whereNotNull('deadline_date')
+                ->whereDate('deadline_date', '<', now()->toDateString());
+        }
+
         $tasks = $query
             ->orderByRaw('deadline_date IS NULL')
             ->orderBy('deadline_date')
@@ -50,6 +56,7 @@ class TaskController extends Controller
             'tasks' => $tasks,
             'filters' => [
                 'status' => $status,
+                'overdue' => $request->boolean('overdue'),
             ],
         ]);
     }
@@ -124,16 +131,12 @@ class TaskController extends Controller
         return redirect()->route('tasks.index')->with('success', 'Task deleted.');
     }
 
-    public function complete(Request $request, Task $task): RedirectResponse
+    public function complete(Request $request, Task $task, TaskCompletionService $completion): RedirectResponse
     {
         $this->authorize('update', $task);
 
-        $task->update([
-            'status' => 'completed',
-            'completed_at' => now(),
-            'completed_by' => $request->user()->id,
-        ]);
+        $completion->complete($task, $request->user());
 
-        return redirect()->route('tasks.index')->with('success', 'Task marked complete.');
+        return redirect()->route('tasks.index')->with('success', 'Task marked complete. Compliance dates were rolled forward where applicable and the next period task was synced.');
     }
 }
