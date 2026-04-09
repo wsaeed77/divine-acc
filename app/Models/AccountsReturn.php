@@ -25,6 +25,8 @@ class AccountsReturn extends Model
         'latest_action_date',
         'records_received',
         'progress_note',
+        'sa_income_overview',
+        'sa_notes',
     ];
 
     protected $casts = [

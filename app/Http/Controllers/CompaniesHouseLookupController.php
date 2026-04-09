@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClientType;
 use App\Models\CompanyStatus;
 use App\Models\SicCode;
 use Illuminate\Http\JsonResponse;
@@ -78,8 +79,11 @@ class CompaniesHouseLookupController extends Controller
 
         $incorporation = $data['date_of_creation'] ?? null;
 
+        $suggestedClientTypeId = $this->suggestClientTypeId($data);
+
         return response()->json([
             'suggested_name' => $data['company_name'] ?? null,
+            'suggested_client_type_id' => $suggestedClientTypeId,
             'company' => [
                 'company_number' => $data['company_number'] ?? $number,
                 'company_status_id' => $statusId ? (string) $statusId : '',
@@ -88,6 +92,26 @@ class CompaniesHouseLookupController extends Controller
                 'sic_code_id' => $sicCodeId ? (string) $sicCodeId : '',
             ],
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $profile
+     */
+    private function suggestClientTypeId(array $profile): ?string
+    {
+        $t = isset($profile['type']) ? strtolower((string) $profile['type']) : '';
+        $name = match ($t) {
+            'ltd' => 'Private Limited Company',
+            'llp' => 'Limited Liability Partnership (LLP)',
+            default => null,
+        };
+        if ($name === null) {
+            return null;
+        }
+
+        $id = ClientType::query()->where('name', $name)->where('is_active', true)->value('id');
+
+        return $id !== null ? (string) $id : null;
     }
 
     private function mapCompanyStatus(?string $apiStatus): ?string

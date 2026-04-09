@@ -6,7 +6,7 @@ function FieldError({ form, name }) {
     return <p className="mt-1 text-sm text-red-600">{msg}</p>;
 }
 
-export default function ClientExtendedSections({ form, lookups }) {
+export default function ClientExtendedSections({ form, lookups, isSelfAssessment = false }) {
     const s = (section, key, value) => {
         form.setData(section, { ...form.data[section], [key]: value });
     };
@@ -307,26 +307,30 @@ export default function ClientExtendedSections({ form, lookups }) {
                             {sel(lookups.languages)}
                         </select>
                     </div>
-                    <label className="flex items-center gap-2 sm:col-span-2">
-                        <input
-                            type="checkbox"
-                            className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                            checked={!!mc.create_self_assessment}
-                            onChange={(e) => setMain('create_self_assessment', e.target.checked)}
-                        />
-                        <span className="text-sm text-slate-700">Create self assessment</span>
-                    </label>
-                    <div>
-                        <label className="label-field">Self assessment fee (£)</label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            className="input-field"
-                            value={mc.self_assessment_fee ?? ''}
-                            onChange={(e) => setMain('self_assessment_fee', e.target.value)}
-                        />
-                    </div>
+                    {!isSelfAssessment && (
+                        <>
+                            <label className="flex items-center gap-2 sm:col-span-2">
+                                <input
+                                    type="checkbox"
+                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                    checked={!!mc.create_self_assessment}
+                                    onChange={(e) => setMain('create_self_assessment', e.target.checked)}
+                                />
+                                <span className="text-sm text-slate-700">Create self assessment</span>
+                            </label>
+                            <div>
+                                <label className="label-field">Self assessment fee (£)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    className="input-field"
+                                    value={mc.self_assessment_fee ?? ''}
+                                    onChange={(e) => setMain('self_assessment_fee', e.target.value)}
+                                />
+                            </div>
+                        </>
+                    )}
                     <label className="flex items-center gap-2 sm:col-span-2">
                         <input
                             type="checkbox"
@@ -345,6 +349,13 @@ export default function ClientExtendedSections({ form, lookups }) {
                     Secondary contact
                 </summary>
                 <div className="grid gap-4 px-6 py-6 sm:grid-cols-2">
+                    {isSelfAssessment && (
+                        <p className="sm:col-span-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200/80">
+                            For Self Assessment clients, link secondary contacts here when a second person is
+                            involved. The &quot;Create self assessment&quot; option is not shown because the
+                            client is already a Self Assessment type.
+                        </p>
+                    )}
                     <p className="sm:col-span-2 text-sm text-slate-600">
                         Optional second person for this client. Leave names empty if not used.
                     </p>
@@ -452,7 +463,14 @@ export default function ClientExtendedSections({ form, lookups }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {(form.data.services ?? []).map((row, idx) => (
+                            {(form.data.services ?? []).map((row, idx) => {
+                                if (
+                                    isSelfAssessment &&
+                                    (row.slug === 'ct600_return' || row.slug === 'confirmation_statement')
+                                ) {
+                                    return null;
+                                }
+                                return (
                                 <tr key={row.service_id} className="border-b border-slate-100">
                                     <td className="py-2 pr-4 text-slate-900">{row.name}</td>
                                     <td className="py-2 pr-4">
@@ -478,7 +496,8 @@ export default function ClientExtendedSections({ form, lookups }) {
                                         />
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                     <FieldError form={form} name="services" />
@@ -585,6 +604,28 @@ export default function ClientExtendedSections({ form, lookups }) {
                 <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
                     Accounts &amp; returns
                 </summary>
+                {isSelfAssessment ? (
+                <div className="grid gap-4 px-6 py-6 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                        <label className="label-field">Income overview (Self Assessment)</label>
+                        <textarea
+                            rows={4}
+                            className="input-field"
+                            value={ar.sa_income_overview ?? ''}
+                            onChange={(e) => s('accounts_returns', 'sa_income_overview', e.target.value)}
+                        />
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label className="label-field">Notes</label>
+                        <textarea
+                            rows={4}
+                            className="input-field"
+                            value={ar.sa_notes ?? ''}
+                            onChange={(e) => s('accounts_returns', 'sa_notes', e.target.value)}
+                        />
+                    </div>
+                </div>
+                ) : (
                 <div className="grid gap-4 px-6 py-6 sm:grid-cols-2">
                     <div>
                         <label className="label-field">Accounts period end</label>
@@ -722,8 +763,10 @@ export default function ClientExtendedSections({ form, lookups }) {
                         />
                     </div>
                 </div>
+                )}
             </details>
 
+            {!isSelfAssessment && (
             <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
                 <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
                     Confirmation statement
@@ -825,6 +868,7 @@ export default function ClientExtendedSections({ form, lookups }) {
                     </div>
                 </div>
             </details>
+            )}
 
             <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
                 <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
@@ -1239,6 +1283,17 @@ export default function ClientExtendedSections({ form, lookups }) {
                                     onChange={(e) => s('auto_enrolment', 'latest_action_date', e.target.value)}
                                 />
                             </div>
+                            {isSelfAssessment && (
+                                <div className="sm:col-span-2">
+                                    <label className="label-field">Missing records</label>
+                                    <textarea
+                                        rows={2}
+                                        className="input-field"
+                                        value={ae.missing_records ?? ''}
+                                        onChange={(e) => s('auto_enrolment', 'missing_records', e.target.value)}
+                                    />
+                                </div>
+                            )}
                             <div>
                                 <label className="label-field">Records received</label>
                                 <input
@@ -1382,6 +1437,17 @@ export default function ClientExtendedSections({ form, lookups }) {
                                     onChange={(e) => s('p11d', 'latest_action_date', e.target.value)}
                                 />
                             </div>
+                            {isSelfAssessment && (
+                                <div className="sm:col-span-2">
+                                    <label className="label-field">Missing records</label>
+                                    <textarea
+                                        rows={2}
+                                        className="input-field"
+                                        value={p11d.missing_records ?? ''}
+                                        onChange={(e) => s('p11d', 'missing_records', e.target.value)}
+                                    />
+                                </div>
+                            )}
                             <div>
                                 <label className="label-field">Records received</label>
                                 <input

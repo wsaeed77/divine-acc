@@ -4,11 +4,13 @@ namespace App\Services;
 
 use App\Models\AccountsReturn;
 use App\Models\AutoEnrolment;
+use App\Models\BusinessDetail;
 use App\Models\CisDetail;
 use App\Models\Client;
 use App\Models\ClientCombinedPricing;
 use App\Models\ClientRegistration;
 use App\Models\ClientService;
+use App\Models\ClientType;
 use App\Models\ConfirmationStatement;
 use App\Models\Contact;
 use App\Models\P11dDetail;
@@ -29,6 +31,8 @@ class ClientExtendedDataService
     {
         if ($client->clientServices()->count() === 0) {
             $this->bootstrapForNewClient($client);
+        } else {
+            BusinessDetail::query()->firstOrCreate(['client_id' => $client->id]);
         }
     }
 
@@ -51,6 +55,74 @@ class ClientExtendedDataService
             AutoEnrolment::query()->firstOrCreate(['client_id' => $client->id]);
             P11dDetail::query()->firstOrCreate(['client_id' => $client->id]);
             ClientRegistration::query()->firstOrCreate(['client_id' => $client->id]);
+            BusinessDetail::query()->firstOrCreate(['client_id' => $client->id]);
+        });
+    }
+
+    /**
+     * When client type is switched to Self Assessment, clear services and compliance detail data (FR-20).
+     */
+    public function clearExtendedRecordsForSelfAssessmentSwitch(Client $client): void
+    {
+        $this->ensureBootstrapped($client);
+
+        DB::transaction(function () use ($client) {
+            ClientService::query()->where('client_id', $client->id)->update(['is_enabled' => false, 'fee' => null]);
+
+            $client->combinedPricing()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyCombinedPricing([
+                    'annual_charge_enabled' => false,
+                    'annual_charge' => '',
+                    'monthly_charge_enabled' => false,
+                    'monthly_charge' => '',
+                ])
+            );
+
+            $client->accountsReturn()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyAccountsReturn($this->emptyAccountsReturnsForm())
+            );
+
+            $client->confirmationStatement()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyConfirmationStatement($this->emptyConfirmationStatementForm())
+            );
+
+            $client->vatDetail()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyVatDetail($this->emptyVatForm())
+            );
+
+            $client->payeDetail()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyPayeDetail($this->emptyPayeForm())
+            );
+
+            $client->cisDetail()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyCisDetail($this->emptyCisForm())
+            );
+
+            $client->autoEnrolment()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyAutoEnrolment($this->emptyAutoEnrolmentForm())
+            );
+
+            $client->p11dDetail()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyP11dDetail($this->emptyP11dForm())
+            );
+
+            $client->clientRegistration()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyRegistration($this->emptyRegistrationForm())
+            );
+
+            $client->businessDetail()->updateOrCreate(
+                ['client_id' => $client->id],
+                $this->onlyBusinessDetail($this->emptyBusinessForm())
+            );
         });
     }
 
@@ -65,6 +137,7 @@ class ClientExtendedDataService
             'clientServices.service',
             'combinedPricing',
             'contacts',
+            'businessDetail',
             'accountsReturn',
             'confirmationStatement',
             'vatDetail',
@@ -91,6 +164,7 @@ class ClientExtendedDataService
             'services' => $services,
             'main_contact' => $mainContact ? $this->mapContact($mainContact) : $this->emptyMainContact(),
             'secondary_contact' => $secondaryContact ? $this->mapSecondaryContact($secondaryContact) : $this->emptySecondaryContact(),
+            'business' => $this->mapBusinessDetail($client->businessDetail),
             'accounts_returns' => $this->mapAccountsReturn($client->accountsReturn),
             'confirmation_statement' => $this->mapConfirmationStatement($client->confirmationStatement),
             'vat' => $this->mapVatDetail($client->vatDetail),
@@ -127,6 +201,7 @@ class ClientExtendedDataService
             'services' => $services,
             'main_contact' => $this->emptyMainContact(),
             'secondary_contact' => $this->emptySecondaryContact(),
+            'business' => $this->emptyBusinessForm(),
             'accounts_returns' => $this->emptyAccountsReturnsForm(),
             'confirmation_statement' => $this->emptyConfirmationStatementForm(),
             'vat' => $this->emptyVatForm(),
@@ -145,6 +220,13 @@ class ClientExtendedDataService
         $validated = $request->validate($this->validationRules($tenantId));
 
         DB::transaction(function () use ($validated, $client, $tenantId) {
+            if (isset($validated['business'])) {
+                $client->businessDetail()->updateOrCreate(
+                    ['client_id' => $client->id],
+                    $this->onlyBusinessDetail($validated['business'])
+                );
+            }
+
             if (isset($validated['combined_pricing'])) {
                 $client->combinedPricing()->updateOrCreate(
                     ['client_id' => $client->id],
@@ -291,6 +373,12 @@ class ClientExtendedDataService
             'self_assessment_fee' => $data['self_assessment_fee'] ?? null,
             'client_does_own_sa' => (bool) ($data['client_does_own_sa'] ?? false),
         ];
+
+        $client->loadMissing('clientType');
+        if ($client->clientType?->name === ClientType::NAME_SELF_ASSESSMENT) {
+            $pivot['create_self_assessment'] = false;
+            $pivot['self_assessment_fee'] = null;
+        }
 
         DB::table('client_contacts')->where('client_id', $client->id)->update(['is_main_contact' => false]);
 
@@ -543,6 +631,8 @@ class ClientExtendedDataService
             'latest_action_date' => '',
             'records_received' => '',
             'progress_note' => '',
+            'sa_income_overview' => '',
+            'sa_notes' => '',
         ];
     }
 
@@ -655,6 +745,7 @@ class ClientExtendedDataService
             'latest_action_date' => '',
             'records_received' => '',
             'progress_note' => '',
+            'missing_records' => '',
             'staging_date' => '',
             'postponement_date' => '',
             'pensions_regulator_opt_out_date' => '',
@@ -678,6 +769,7 @@ class ClientExtendedDataService
             'latest_action_date' => '',
             'records_received' => '',
             'progress_note' => '',
+            'missing_records' => '',
         ];
     }
 
@@ -698,7 +790,7 @@ class ClientExtendedDataService
     private function mapAccountsReturn(?AccountsReturn $m): array
     {
         if (! $m) {
-            return [];
+            return $this->emptyAccountsReturnsForm();
         }
 
         return [
@@ -716,6 +808,58 @@ class ClientExtendedDataService
             'latest_action_date' => $m->latest_action_date?->format('Y-m-d'),
             'records_received' => $m->records_received?->format('Y-m-d'),
             'progress_note' => $m->progress_note,
+            'sa_income_overview' => $m->sa_income_overview,
+            'sa_notes' => $m->sa_notes,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapBusinessDetail(?BusinessDetail $m): array
+    {
+        if (! $m) {
+            return $this->emptyBusinessForm();
+        }
+
+        return [
+            'trading_name' => $m->trading_name,
+            'business_address' => $m->business_address,
+            'nature_of_business' => $m->nature_of_business,
+            'utr' => $m->utr,
+            'telephone' => $m->telephone,
+            'email' => $m->email,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyBusinessForm(): array
+    {
+        return [
+            'trading_name' => '',
+            'business_address' => '',
+            'nature_of_business' => '',
+            'utr' => '',
+            'telephone' => '',
+            'email' => '',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $d
+     * @return array<string, mixed>
+     */
+    private function onlyBusinessDetail(array $d): array
+    {
+        return [
+            'trading_name' => $d['trading_name'] ?: null,
+            'business_address' => $d['business_address'] ?: null,
+            'nature_of_business' => $d['nature_of_business'] ?: null,
+            'utr' => $d['utr'] ?: null,
+            'telephone' => $d['telephone'] ?: null,
+            'email' => $d['email'] ?: null,
         ];
     }
 
@@ -833,6 +977,7 @@ class ClientExtendedDataService
             'latest_action_date' => $m->latest_action_date?->format('Y-m-d'),
             'records_received' => $m->records_received?->format('Y-m-d'),
             'progress_note' => $m->progress_note,
+            'missing_records' => $m->missing_records,
             'staging_date' => $m->staging_date?->format('Y-m-d'),
             'postponement_date' => $m->postponement_date?->format('Y-m-d'),
             'pensions_regulator_opt_out_date' => $m->pensions_regulator_opt_out_date?->format('Y-m-d'),
@@ -857,6 +1002,7 @@ class ClientExtendedDataService
             'latest_action_date' => $m->latest_action_date?->format('Y-m-d'),
             'records_received' => $m->records_received?->format('Y-m-d'),
             'progress_note' => $m->progress_note,
+            'missing_records' => $m->missing_records,
         ];
     }
 
@@ -910,6 +1056,8 @@ class ClientExtendedDataService
             'latest_action_date' => $d['latest_action_date'] ?: null,
             'records_received' => $d['records_received'] ?: null,
             'progress_note' => $d['progress_note'] ?: null,
+            'sa_income_overview' => $d['sa_income_overview'] ?: null,
+            'sa_notes' => $d['sa_notes'] ?: null,
         ];
     }
 
@@ -1027,6 +1175,7 @@ class ClientExtendedDataService
             'latest_action_date' => $d['latest_action_date'] ?: null,
             'records_received' => $d['records_received'] ?: null,
             'progress_note' => $d['progress_note'] ?: null,
+            'missing_records' => $d['missing_records'] ?: null,
             'staging_date' => $d['staging_date'] ?: null,
             'postponement_date' => $d['postponement_date'] ?: null,
             'pensions_regulator_opt_out_date' => $d['pensions_regulator_opt_out_date'] ?: null,
@@ -1051,6 +1200,7 @@ class ClientExtendedDataService
             'latest_action_date' => $d['latest_action_date'] ?: null,
             'records_received' => $d['records_received'] ?: null,
             'progress_note' => $d['progress_note'] ?: null,
+            'missing_records' => $d['missing_records'] ?: null,
         ];
     }
 
@@ -1149,6 +1299,14 @@ class ClientExtendedDataService
             'secondary_contact.id_check_started' => ['boolean'],
             'secondary_contact.id_check_date' => ['nullable', 'date'],
 
+            'business' => ['nullable', 'array'],
+            'business.trading_name' => ['nullable', 'string', 'max:255'],
+            'business.business_address' => ['nullable', 'string', 'max:5000'],
+            'business.nature_of_business' => ['nullable', 'string', 'max:255'],
+            'business.utr' => ['nullable', 'string', 'max:20'],
+            'business.telephone' => ['nullable', 'string', 'max:30'],
+            'business.email' => ['nullable', 'email', 'max:255'],
+
             'accounts_returns' => ['nullable', 'array'],
             'accounts_returns.accounts_period_end' => ['nullable', 'date'],
             'accounts_returns.ch_year_end' => ['nullable', 'date'],
@@ -1164,6 +1322,8 @@ class ClientExtendedDataService
             'accounts_returns.latest_action_date' => ['nullable', 'date'],
             'accounts_returns.records_received' => ['nullable', 'date'],
             'accounts_returns.progress_note' => ['nullable', 'string'],
+            'accounts_returns.sa_income_overview' => ['nullable', 'string'],
+            'accounts_returns.sa_notes' => ['nullable', 'string'],
 
             'confirmation_statement' => ['nullable', 'array'],
             'confirmation_statement.statement_date' => ['nullable', 'date'],
@@ -1249,6 +1409,7 @@ class ClientExtendedDataService
             'auto_enrolment.pension_id' => ['nullable', 'string', 'max:50'],
             'auto_enrolment.declaration_of_compliance_due' => ['nullable', 'date'],
             'auto_enrolment.declaration_of_compliance_submission' => ['nullable', 'date'],
+            'auto_enrolment.missing_records' => ['nullable', 'string'],
 
             'p11d' => ['nullable', 'array'],
             'p11d.next_return_due' => ['nullable', 'date'],
@@ -1257,6 +1418,7 @@ class ClientExtendedDataService
             'p11d.latest_action_date' => ['nullable', 'date'],
             'p11d.records_received' => ['nullable', 'date'],
             'p11d.progress_note' => ['nullable', 'string'],
+            'p11d.missing_records' => ['nullable', 'string'],
 
             'registration' => ['nullable', 'array'],
             'registration.terms_signed_fee_paid' => ['boolean'],

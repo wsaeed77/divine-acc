@@ -1,6 +1,18 @@
 import { Link, useForm, usePage } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import ClientExtendedSections from './ClientExtendedSections';
+import CompaniesHouseSearchModal from './CompaniesHouseSearchModal';
+
+function emptyBusiness() {
+    return {
+        trading_name: '',
+        business_address: '',
+        nature_of_business: '',
+        utr: '',
+        telephone: '',
+        email: '',
+    };
+}
 
 function emptyCompany() {
     return {
@@ -36,6 +48,8 @@ export default function ClientForm({
     company: initialCompany,
     extended: initialExtended,
     extendedLookups,
+    emptyExtendedTemplate,
+    selfAssessmentTypeId,
 }) {
     const { auth } = usePage().props;
     const role = auth.user.role;
@@ -78,12 +92,63 @@ export default function ClientForm({
         onboarding_workflow: false,
         company: { ...emptyCompany(), ...initialCompany },
         ...(initialExtended ?? {}),
+        business: { ...emptyBusiness(), ...(initialExtended?.business ?? {}) },
     });
 
     const [chMessage, setChMessage] = useState(null);
     const [chLoading, setChLoading] = useState(false);
+    const [chModalOpen, setChModalOpen] = useState(false);
 
     const c = form.data.company;
+    const b = form.data.business ?? emptyBusiness();
+
+    const isSelfAssessment = useMemo(() => {
+        if (selfAssessmentTypeId == null) {
+            return false;
+        }
+        return String(form.data.client_type_id) === String(selfAssessmentTypeId);
+    }, [form.data.client_type_id, selfAssessmentTypeId]);
+
+    const applySelfAssessmentSwitchReset = useCallback(() => {
+        if (!emptyExtendedTemplate) {
+            return;
+        }
+        const t = emptyExtendedTemplate;
+        form.setData('combined_pricing', t.combined_pricing);
+        form.setData('services', t.services);
+        form.setData('main_contact', t.main_contact);
+        form.setData('secondary_contact', t.secondary_contact);
+        form.setData('business', { ...emptyBusiness(), ...(t.business ?? {}) });
+        form.setData('accounts_returns', t.accounts_returns);
+        form.setData('confirmation_statement', t.confirmation_statement);
+        form.setData('vat', t.vat);
+        form.setData('paye', t.paye);
+        form.setData('cis', t.cis);
+        form.setData('auto_enrolment', t.auto_enrolment);
+        form.setData('p11d', t.p11d);
+        form.setData('registration', t.registration);
+        form.setData('name', '');
+        form.setData('company', { ...emptyCompany() });
+    }, [emptyExtendedTemplate, form]);
+
+    const onClientTypeChange = (value) => {
+        const switchingToSa =
+            selfAssessmentTypeId != null && String(value) === String(selfAssessmentTypeId);
+        if (mode === 'edit' && switchingToSa && !isSelfAssessment) {
+            const ok = window.confirm(
+                'Switching to Self Assessment will clear selected services and compliance data for this client. Continue?'
+            );
+            if (!ok) {
+                return;
+            }
+            applySelfAssessmentSwitchReset();
+        }
+        form.setData('client_type_id', value);
+    };
+
+    const setBusiness = (key, value) => {
+        form.setData('business', { ...form.data.business, [key]: value });
+    };
 
     const submit = (e, onboardingWorkflow = false) => {
         e.preventDefault();
@@ -96,27 +161,30 @@ export default function ClientForm({
         }
     };
 
-    const autofillCompaniesHouse = async () => {
-        setChMessage(null);
-        const num = String(c.company_number ?? '').trim();
+    const applyCompaniesHouseProfile = async (companyNumber) => {
+        const num = String(companyNumber ?? '').trim();
         if (!num) {
-            setChMessage('Enter a company number first.');
-            return;
+            throw new Error('Missing company number.');
         }
         setChLoading(true);
         try {
             const { data } = await window.axios.post('/lookup/companies-house', {
                 company_number: num,
             });
-            if (data.suggested_name && !String(form.data.name ?? '').trim()) {
+            if (data.suggested_name) {
                 form.setData('name', data.suggested_name);
+            }
+            if (
+                data.suggested_client_type_id &&
+                !String(form.data.client_type_id ?? '').trim()
+            ) {
+                form.setData('client_type_id', String(data.suggested_client_type_id));
             }
             if (data.company) {
                 form.setData('company', { ...form.data.company, ...data.company });
             }
             setChMessage('Loaded from Companies House.');
-        } catch (err) {
-            setChMessage(err.response?.data?.message ?? 'Companies House lookup failed.');
+            setChModalOpen(false);
         } finally {
             setChLoading(false);
         }
@@ -127,6 +195,7 @@ export default function ClientForm({
     };
 
     return (
+        <>
         <form
             onSubmit={(e) => submit(e, false)}
             className="space-y-8"
@@ -136,22 +205,48 @@ export default function ClientForm({
                     Required information
                 </summary>
                 <div className="space-y-5 px-6 py-6">
-                    <div>
-                        <label htmlFor="name" className="label-field">
-                            Client name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            id="name"
-                            type="text"
-                            className="input-field"
-                            value={form.data.name}
-                            onChange={(e) => form.setData('name', e.target.value)}
-                            required
-                        />
-                        {form.errors.name && (
-                            <p className="mt-1 text-sm text-red-600">{form.errors.name}</p>
-                        )}
-                    </div>
+                    {!isSelfAssessment && (
+                        <div>
+                            <button
+                                type="button"
+                                className="btn-primary w-full sm:w-auto"
+                                disabled={chLoading}
+                                onClick={() => {
+                                    setChMessage(null);
+                                    setChModalOpen(true);
+                                }}
+                            >
+                                {chLoading ? 'Loading…' : 'Autofill with Companies House'}
+                            </button>
+                            {chMessage && (
+                                <p className="mt-2 text-sm text-slate-600">{chMessage}</p>
+                            )}
+                        </div>
+                    )}
+                    {!isSelfAssessment && (
+                        <div>
+                            <label htmlFor="name" className="label-field">
+                                Client name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                id="name"
+                                type="text"
+                                className="input-field"
+                                value={form.data.name}
+                                onChange={(e) => form.setData('name', e.target.value)}
+                                required
+                            />
+                            {form.errors.name && (
+                                <p className="mt-1 text-sm text-red-600">{form.errors.name}</p>
+                            )}
+                        </div>
+                    )}
+                    {isSelfAssessment && (
+                        <p className="text-sm text-slate-600">
+                            Client display name is derived from the main contact when you save (Self Assessment
+                            workflow).
+                        </p>
+                    )}
                     <div>
                         <label htmlFor="client_type_id" className="label-field">
                             Client type <span className="text-red-500">*</span>
@@ -160,7 +255,7 @@ export default function ClientForm({
                             id="client_type_id"
                             className="input-field"
                             value={form.data.client_type_id}
-                            onChange={(e) => form.setData('client_type_id', e.target.value)}
+                            onChange={(e) => onClientTypeChange(e.target.value)}
                             required
                         >
                             <option value="">Select type…</option>
@@ -239,33 +334,35 @@ export default function ClientForm({
                             </span>
                         </label>
                     </div>
-                    <div className="flex flex-wrap items-center gap-6">
-                        <label className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                                checked={form.data.credit_check_completed}
-                                onChange={(e) =>
-                                    form.setData('credit_check_completed', e.target.checked)
-                                }
-                            />
-                            <span className="text-sm text-slate-700">Credit check completed</span>
-                        </label>
-                        {form.data.credit_check_completed && (
-                            <div className="min-w-[10rem]">
-                                <label htmlFor="credit_check_date" className="label-field">
-                                    Credit check date
-                                </label>
+                    {!isSelfAssessment && (
+                        <div className="flex flex-wrap items-center gap-6">
+                            <label className="flex items-center gap-2">
                                 <input
-                                    id="credit_check_date"
-                                    type="date"
-                                    className="input-field"
-                                    value={form.data.credit_check_date || ''}
-                                    onChange={(e) => form.setData('credit_check_date', e.target.value)}
+                                    type="checkbox"
+                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                    checked={form.data.credit_check_completed}
+                                    onChange={(e) =>
+                                        form.setData('credit_check_completed', e.target.checked)
+                                    }
                                 />
-                            </div>
-                        )}
-                    </div>
+                                <span className="text-sm text-slate-700">Credit check completed</span>
+                            </label>
+                            {form.data.credit_check_completed && (
+                                <div className="min-w-[10rem]">
+                                    <label htmlFor="credit_check_date" className="label-field">
+                                        Credit check date
+                                    </label>
+                                    <input
+                                        id="credit_check_date"
+                                        type="date"
+                                        className="input-field"
+                                        value={form.data.credit_check_date || ''}
+                                        onChange={(e) => form.setData('credit_check_date', e.target.value)}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </details>
 
@@ -294,34 +391,90 @@ export default function ClientForm({
                 </div>
             </details>
 
+            {isSelfAssessment && (
+            <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
+                <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
+                    Business details
+                </summary>
+                <div className="grid gap-5 px-6 py-6 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                        <label className="label-field">Trading / business name</label>
+                        <input
+                            type="text"
+                            className="input-field"
+                            value={b.trading_name ?? ''}
+                            onChange={(e) => setBusiness('trading_name', e.target.value)}
+                        />
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label className="label-field">Business address</label>
+                        <textarea
+                            rows={3}
+                            className="input-field"
+                            value={b.business_address ?? ''}
+                            onChange={(e) => setBusiness('business_address', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="label-field">Nature of business</label>
+                        <input
+                            type="text"
+                            className="input-field"
+                            value={b.nature_of_business ?? ''}
+                            onChange={(e) => setBusiness('nature_of_business', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="label-field">UTR</label>
+                        <input
+                            type="text"
+                            className="input-field"
+                            value={b.utr ?? ''}
+                            onChange={(e) => setBusiness('utr', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="label-field">Telephone</label>
+                        <input
+                            type="text"
+                            className="input-field"
+                            value={b.telephone ?? ''}
+                            onChange={(e) => setBusiness('telephone', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="label-field">Email</label>
+                        <input
+                            type="email"
+                            className="input-field"
+                            value={b.email ?? ''}
+                            onChange={(e) => setBusiness('email', e.target.value)}
+                        />
+                    </div>
+                </div>
+            </details>
+            )}
+
+            {!isSelfAssessment && (
             <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
                 <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
                     Company details
                 </summary>
                 <div className="grid gap-5 px-6 py-6 sm:grid-cols-2">
-                    <div className="sm:col-span-2 flex flex-wrap items-end gap-3">
-                        <div className="min-w-[12rem] flex-1">
-                            <label className="label-field">Company number</label>
-                            <input
-                                type="text"
-                                className="input-field"
-                                value={c.company_number}
-                                onChange={(e) => setCompany('company_number', e.target.value)}
-                                placeholder="e.g. 12345678"
-                            />
-                        </div>
-                        <button
-                            type="button"
-                            className="btn-secondary shrink-0"
-                            disabled={chLoading}
-                            onClick={autofillCompaniesHouse}
-                        >
-                            {chLoading ? 'Looking up…' : 'Autofill from Companies House'}
-                        </button>
+                    <div className="sm:col-span-2">
+                        <label className="label-field">Company number</label>
+                        <input
+                            type="text"
+                            className="input-field"
+                            value={c.company_number}
+                            onChange={(e) => setCompany('company_number', e.target.value)}
+                            placeholder="e.g. 12345678"
+                        />
+                        <p className="mt-1 text-xs text-slate-500">
+                            Use &quot;Autofill with Companies House&quot; in Required information to search and
+                            fill details.
+                        </p>
                     </div>
-                    {chMessage && (
-                        <p className="sm:col-span-2 text-sm text-slate-600">{chMessage}</p>
-                    )}
                     <div>
                         <label className="label-field">Company status</label>
                         <select
@@ -496,6 +649,7 @@ export default function ClientForm({
                     </div>
                 </div>
             </details>
+            )}
 
             <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
                 <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
@@ -566,7 +720,11 @@ export default function ClientForm({
             </details>
 
             {extendedLookups && (
-                <ClientExtendedSections form={form} lookups={extendedLookups} />
+                <ClientExtendedSections
+                    form={form}
+                    lookups={extendedLookups}
+                    isSelfAssessment={isSelfAssessment}
+                />
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -590,5 +748,12 @@ export default function ClientForm({
                 </div>
             </div>
         </form>
+
+        <CompaniesHouseSearchModal
+            open={chModalOpen}
+            onClose={() => setChModalOpen(false)}
+            onSelectCompanyNumber={applyCompaniesHouseProfile}
+        />
+        </>
     );
 }

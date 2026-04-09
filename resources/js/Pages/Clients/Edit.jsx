@@ -12,6 +12,8 @@ export default function Edit({
     company,
     extended,
     extendedLookups,
+    emptyExtendedTemplate,
+    selfAssessmentTypeId,
 }) {
     return (
         <AuthenticatedLayout header="Edit client">
@@ -27,6 +29,8 @@ export default function Edit({
                 company={company}
                 extended={extended}
                 extendedLookups={extendedLookups}
+                emptyExtendedTemplate={emptyExtendedTemplate}
+                selfAssessmentTypeId={selfAssessmentTypeId}
             />
         </AuthenticatedLayout>
     );

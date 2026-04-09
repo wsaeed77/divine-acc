@@ -91,7 +91,7 @@ class ClientController extends Controller
                 'manager_id' => $request->input('manager_id'),
                 'status' => $status,
             ],
-            'clientTypes' => ClientType::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'clientTypes' => ClientType::query()->forClientFormSelect()->orderBy('name')->get(['id', 'name']),
             'partnerOptions' => $this->partnerUserOptions($tenantId),
             'managerOptions' => $this->managerUserOptions($tenantId),
         ]);
@@ -102,13 +102,15 @@ class ClientController extends Controller
         $tenantId = $request->user()->tenant_id;
 
         return Inertia::render('Clients/Create', [
-            'clientTypes' => ClientType::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'clientTypes' => ClientType::query()->forClientFormSelect()->orderBy('name')->get(['id', 'name']),
             'partnerOptions' => $this->partnerUserOptions($tenantId),
             'managerOptions' => $this->managerUserOptions($tenantId),
             'companyStatuses' => CompanyStatus::query()->orderBy('name')->get(['id', 'name']),
             'sicCodes' => SicCode::query()->orderBy('code')->limit(500)->get(['id', 'code', 'description']),
             'company' => $this->emptyCompanyPayload(),
             'extended' => $this->clientExtendedData->emptyExtendedFormPayload(),
+            'emptyExtendedTemplate' => $this->clientExtendedData->emptyExtendedFormPayload(),
+            'selfAssessmentTypeId' => ClientType::selfAssessmentId(),
             'extendedLookups' => $this->extendedFormLookups(),
         ]);
     }
@@ -193,13 +195,15 @@ class ClientController extends Controller
                 'other_details' => $client->other_details,
                 'is_prospect' => $client->is_prospect,
             ],
-            'clientTypes' => ClientType::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'clientTypes' => ClientType::query()->forClientFormSelect($client->client_type_id)->orderBy('name')->get(['id', 'name']),
             'partnerOptions' => $this->partnerUserOptions($tenantId),
             'managerOptions' => $this->managerUserOptions($tenantId),
             'companyStatuses' => CompanyStatus::query()->orderBy('name')->get(['id', 'name']),
             'sicCodes' => SicCode::query()->orderBy('code')->limit(500)->get(['id', 'code', 'description']),
             'company' => $this->companyPayloadFromModel($client->companyDetail),
             'extended' => $extended,
+            'emptyExtendedTemplate' => $this->clientExtendedData->emptyExtendedFormPayload(),
+            'selfAssessmentTypeId' => ClientType::selfAssessmentId(),
             'extendedLookups' => $this->extendedFormLookups(),
         ]);
     }
@@ -218,13 +222,23 @@ class ClientController extends Controller
 
         $this->clientExtendedData->ensureBootstrapped($client);
 
-        DB::transaction(function () use ($request, $client, $clientData, $companyData) {
+        $client->load('clientType');
+        $wasSelfAssessment = $client->clientType?->name === ClientType::NAME_SELF_ASSESSMENT;
+        $newSelfAssessment = ClientType::query()
+            ->whereKey((int) $clientData['client_type_id'])
+            ->where('name', ClientType::NAME_SELF_ASSESSMENT)
+            ->exists();
+
+        DB::transaction(function () use ($request, $client, $clientData, $companyData, $wasSelfAssessment, $newSelfAssessment) {
             $client->update($clientData);
+            if (! $wasSelfAssessment && $newSelfAssessment) {
+                $this->clientExtendedData->clearExtendedRecordsForSelfAssessmentSwitch($client->fresh());
+            }
             $client->companyDetail()->updateOrCreate(
                 ['client_id' => $client->id],
                 $companyData
             );
-            $this->clientExtendedData->syncFromRequest($request, $client);
+            $this->clientExtendedData->syncFromRequest($request, $client->fresh());
         });
 
         return redirect()->route('clients.show', $client)->with('success', 'Client updated.');
@@ -249,9 +263,18 @@ class ClientController extends Controller
             $internalRefRule = $internalRefRule->ignore($clientId);
         }
 
+        $saId = ClientType::selfAssessmentId();
+        $isSelfAssessment = $saId !== null
+            && (int) $request->input('client_type_id') === (int) $saId;
+
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'client_type_id' => ['required', 'exists:lkp_client_types,id'],
+            'name' => [Rule::requiredIf(! $isSelfAssessment), 'nullable', 'string', 'max:255'],
+            'client_type_id' => [
+                'required',
+                Rule::exists('lkp_client_types', 'id')->where(
+                    fn ($q) => $q->where('name', 'not like', 'Irish %')
+                ),
+            ],
             'internal_reference' => ['nullable', 'string', 'max:50', $internalRefRule],
             'partner_id' => ['nullable', 'integer', $userRule],
             'manager_id' => ['nullable', 'integer', $userRule],
@@ -286,8 +309,15 @@ class ClientController extends Controller
 
         $creditDone = $request->boolean('credit_check_completed');
 
+        $resolvedName = $validated['name'] ?? '';
+        if ($isSelfAssessment && trim((string) $resolvedName) === '') {
+            $mc = $request->input('main_contact', []);
+            $derived = trim(trim((string) ($mc['first_name'] ?? '')).' '.trim((string) ($mc['last_name'] ?? '')));
+            $resolvedName = $derived !== '' ? $derived : 'Self Assessment client';
+        }
+
         $client = [
-            'name' => $validated['name'],
+            'name' => $resolvedName,
             'client_type_id' => $validated['client_type_id'],
             'internal_reference' => $validated['internal_reference'] ?? null,
             'partner_id' => $validated['partner_id'] ?? null,

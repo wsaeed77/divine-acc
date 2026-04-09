@@ -16,6 +16,7 @@ class ClientTypeSeeder extends Seeder
             'Limited Liability Partnership (LLP)',
             'Individual',
             'Charity / Non-profit',
+            'Self Assessment',
         ];
 
         foreach ($types as $name) {

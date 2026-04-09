@@ -15,6 +15,7 @@ class AutoEnrolment extends Model
         'latest_action_date',
         'records_received',
         'progress_note',
+        'missing_records',
         'staging_date',
         'postponement_date',
         'pensions_regulator_opt_out_date',

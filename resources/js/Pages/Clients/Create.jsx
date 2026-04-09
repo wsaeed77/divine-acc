@@ -11,6 +11,8 @@ export default function Create({
     company,
     extended,
     extendedLookups,
+    emptyExtendedTemplate,
+    selfAssessmentTypeId,
 }) {
     return (
         <AuthenticatedLayout header="New client">
@@ -26,6 +28,8 @@ export default function Create({
                 company={company}
                 extended={extended}
                 extendedLookups={extendedLookups}
+                emptyExtendedTemplate={emptyExtendedTemplate}
+                selfAssessmentTypeId={selfAssessmentTypeId}
             />
         </AuthenticatedLayout>
     );

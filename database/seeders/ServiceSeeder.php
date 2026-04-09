@@ -26,6 +26,10 @@ class ServiceSeeder extends Seeder
         ['slug' => 'bill_payment', 'name' => 'Bill Payment'],
         ['slug' => 'consultation_advice', 'name' => 'Consultation/Advice'],
         ['slug' => 'software', 'name' => 'Software'],
+        ['slug' => 'main_contact_sa', 'name' => 'Main Contact SA'],
+        ['slug' => 'self_assessment_tax_return', 'name' => 'Self Assessment Tax Return'],
+        ['slug' => 'mtd_quarterly_filing', 'name' => 'MTD Quarterly Filing'],
+        ['slug' => 'mtd_final_declaration', 'name' => 'MTD Final Declaration'],
     ];
 
     public function run(): void

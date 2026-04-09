@@ -1,8 +1,10 @@
 # Divinne Accountancy Software — Requirements Document
 
 **Module:** Client Management
-**Version:** 1.1
-**Date:** 5 April 2026
+**Version:** 1.2
+**Date:** 9 April 2026
+
+**Change log (1.2):** Added **Self Assessment client type** workflow (forms, services, PAYE additions, task generation, and client-type switch rule) per *BrightManager Docs* — Self Assessment workflow PDF.
 
 ---
 
@@ -16,7 +18,8 @@
 6. [User Roles & Permissions](#6-user-roles--permissions)
 7. [UI Sections & Field Mapping](#7-ui-sections--field-mapping)
 8. [Bright Manager parity & UI behaviour](#8-bright-manager-parity--ui-behaviour)
-9. [Future Modules (Out of Scope)](#9-future-modules-out-of-scope)
+9. [Self Assessment client type — forms, services & tasks](#9-self-assessment-client-type--forms-services--tasks)
+10. [Future Modules (Out of Scope)](#10-future-modules-out-of-scope)
 
 ---
 
@@ -197,6 +200,37 @@ This document covers **Client Management** only. The following is in scope:
 | FR-17.2 | While **prospect**, the system shall **not** run automated task generation for enabled services (Bright Manager behaviour). |
 | FR-17.3 | The user shall be able to mark the client as **confirmed** (not a prospect), after which task sync may create tasks from enabled services. |
 
+### FR-18: Self Assessment client type — forms and sections
+
+| ID | Requirement |
+|----|-------------|
+| FR-18.1 | When **Client Type** is **Self Assessment**, the New/Edit client flow shall use the **Self Assessment** variant defined in [Section 9](#9-self-assessment-client-type--forms-services--tasks): different required fields, **Business details** in place of company details, adjusted contacts and services, no Confirmation Statement section, and a different Accounts & Returns presentation. |
+| FR-18.2 | **Required information (SA):** The **Name** field shall **not** be shown. The **Complete Credit Check** control shall **not** be shown. Other required-information rules for the SA path follow Section 9.1. |
+| FR-18.3 | **Company details (SA):** The standard **Company details** section shall be replaced by **Business details** with a **new field set** (specification TBD in schema/UI design; see Section 9.2). |
+| FR-18.4 | **Main contact (SA):** All fields match the standard main contact list **except** the **Create Self Assessment Client** toggle (and fee) shall **not** be shown. |
+| FR-18.5 | **Secondary contact (SA):** Same as standard **except** the **Create Self Assessment Client** toggle shall **not** be shown; a **message** shall be displayed at the **top** of the secondary contact form (exact copy TBD). |
+| FR-18.6 | **Services required (SA):** Toggles **CT600 Return** and **Confirmation Statement** shall **not** be available. Additional toggles shall be available: **Main Contact SA**, **Self Assessment Tax Return**, **MTD Quarterly Filing**, **MTD Final Declaration** (see Section 9.4). Further task-generation behaviour for these services may be refined separately. |
+| FR-18.7 | **Confirmation Statement (SA):** The entire **Confirmation Statement** section shall **not** be shown for Self Assessment clients. |
+| FR-18.8 | **Accounts and Returns (SA):** A **new form** shall be displayed (field list and DB mapping to be defined; distinct from the standard `accounts_returns` layout in Section 7.6 for non-SA clients). |
+| FR-18.9 | **PAYE (SA):** The PAYE section shall match the standard form **plus** two **Missing records** textarea fields: one placed **below Auto-enrolment latest action** (under the Auto-enrolment sub-heading), and one **below P11D latest action** (under the P11D sub-heading), as in Section 9.7. |
+
+### FR-19: Self Assessment — task generation
+
+| ID | Requirement |
+|----|-------------|
+| FR-19.1 | For Self Assessment clients, the **Companies House Accounts Filing** task (under the Accounts service) shall **not** be created. |
+| FR-19.2 | **Main Contact SA** service: **no** task and **no** tab shall be generated. |
+| FR-19.3 | **Self Assessment Tax Return** service: create **Task 1 — SA Tax Return Preparation**, **Task 2 — SA Tax Return Filing**; a **new tab** shall be created in the task UI for this service. |
+| FR-19.4 | **MTD Quarterly Filing** service: **Task 1 — MTD Return Preparation**, **Task 2 — MTD Return Filing**; a **new tab** shall be created. |
+| FR-19.5 | **MTD Final Declaration** service: **Task 1 — MTD Return Preparation**, **Task 2 — MTD Return Filing**; **no** tab shall be created. |
+| FR-19.6 | Task naming, scheduling, and integration with the Task Management module shall align with [task-management requirements](task-management.md) where applicable; SA-specific templates are additive. |
+
+### FR-20: Client type switch to Self Assessment
+
+| ID | Requirement |
+|----|-------------|
+| FR-20.1 | If the user **changes Client Type to Self Assessment** after having selected services and/or entered section data, **all selected services and entered records** for that client shall be **cleared** (or reset to empty defaults), and the user shall work from the Self Assessment form set. The UI shall make this data loss explicit where practicable (e.g. confirm dialog). |
+
 ---
 
 ## 4. Data Requirements
@@ -243,6 +277,7 @@ Every table shall include:
 | BR-10 | Monetary fields must be >= 0 (no negative fees). |
 | BR-11 | Lookup values cannot be deleted if they are referenced by any client record (RESTRICT). |
 | BR-12 | Deleting a client soft-deletes (sets `is_active = 0`); associated detail records are preserved. |
+| BR-13 | When **Client Type** is changed **to Self Assessment**, previously selected services and captured detail records that do not apply to the SA workflow shall be cleared per **FR-20.1**. |
 
 ---
 
@@ -281,10 +316,12 @@ The New Client form is organised into **13 collapsible sections**. Each section 
 | # | Field Label | Input Type | Required | DB Column | Notes |
 |---|-------------|------------|----------|-----------|-------|
 | 1 | Name | Text | Yes | `clients.name` | Client / company display name |
-| 2 | Client Type | Dropdown | Yes | `clients.client_type_id` → `lkp_client_types` | e.g. Private Limited Company, Sole Trader, Partnership, LLP |
+| 2 | Client Type | Dropdown | Yes | `clients.client_type_id` → `lkp_client_types` | e.g. Private Limited Company, Sole Trader, Partnership, LLP, **Self Assessment** |
 | 3 | Complete Credit Check | Button | No | `clients.credit_check_completed`, `clients.credit_check_date` | Sets flag and date when completed |
 | 4 | Partner | Dropdown | No | `clients.partner_id` → `users` | Filtered to users with role = partner |
 | 5 | Manager | Dropdown | No | `clients.manager_id` → `users` | Filtered to users with role = manager |
+
+**Self Assessment variant:** When **Client Type** is **Self Assessment**, **Name** and **Complete Credit Check** are **omitted** from this section per **FR-18.2** and [Section 9.1](#91-required-information). How the client is identified/named for SA (e.g. derived from business or contact) shall be defined at implementation time.
 
 ---
 
@@ -304,6 +341,8 @@ The New Client form is organised into **13 collapsible sections**. Each section 
 > **Database Table:** `company_details`
 > **Collapsible:** Yes (default collapsed)
 > **Note:** "Autofill with Companies House" button at top populates fields from Companies House API.
+
+**Self Assessment variant:** This section is **not** used as-is. It is replaced by **Business details** with a **new** set of fields — see [Section 9.2](#92-company-details--business-details). Companies House autofill applies to the standard company path only unless product later extends autofill for SA business records.
 
 | # | Field Label | Input Type | Required | DB Column | Notes |
 |---|-------------|------------|----------|-----------|-------|
@@ -343,7 +382,7 @@ The New Client form is organised into **13 collapsible sections**. Each section 
 | 5 | Last Name | Text | Yes* | `contacts.last_name` | *Required if creating new |
 | 6 | Start AML Check | Button | No | `contacts.aml_check_started`, `contacts.aml_check_date` | Action button — sets flag and date |
 | 7 | Start ID Check | Button | No | `contacts.id_check_started`, `contacts.id_check_date` | Action button — sets flag and date |
-| 8 | Create Self Assessment Client | Toggle + Currency (£) | No | `client_contacts.create_self_assessment`, `client_contacts.self_assessment_fee` | Toggle enables SA; currency sets fee |
+| 8 | Create Self Assessment Client | Toggle + Currency (£) | No | `client_contacts.create_self_assessment`, `client_contacts.self_assessment_fee` | Toggle enables SA; currency sets fee. **Hidden** when client type is **Self Assessment** (**FR-18.4**). |
 | 9 | Client Does Their Own SA | Toggle | No | `client_contacts.client_does_own_sa` | |
 | 10 | Preferred Name | Text | No | `contacts.preferred_name` | |
 | 11 | Date of Birth | Date | No | `contacts.date_of_birth` | dd/mm/yyyy |
@@ -371,6 +410,8 @@ The New Client form is organised into **13 collapsible sections**. Each section 
 > **Database Tables:** `client_services` + `services`
 > **Collapsible:** Yes (default collapsed)
 > **Note:** Each service has a toggle (on/off) and a fee field (£). Services listed below are seed data.
+
+**Self Assessment variant:** **CT600 Return** and **Confirmation Statement** toggles are **omitted**. The following **additional** services apply: **Main Contact SA**, **Self Assessment Tax Return**, **MTD Quarterly Filing**, **MTD Final Declaration** — see [Section 9.4](#94-services-required). Seed data and task linkage shall be extended accordingly.
 
 | # | Service Name | Input Type | DB Column (toggle) | DB Column (fee) |
 |---|-------------|------------|-----------|----------|
@@ -406,6 +447,8 @@ The New Client form is organised into **13 collapsible sections**. Each section 
 > **Database Table:** `accounts_returns`
 > **Collapsible:** Yes (default collapsed)
 
+**Self Assessment variant:** A **different** Accounts & Returns form shall be shown for Self Assessment clients (new layout and/or storage — align with **FR-18.8** and [Section 9.6](#96-accounts-and-returns-details)). The field table below describes the **non–Self Assessment** default.
+
 | # | Field Label | Input Type | Required | DB Column | Notes |
 |---|-------------|------------|----------|-----------|-------|
 | 1 | Accounts Period End | Date | No | `accounts_returns.accounts_period_end` | |
@@ -429,6 +472,8 @@ The New Client form is organised into **13 collapsible sections**. Each section 
 
 > **Database Table:** `confirmation_statements`
 > **Collapsible:** Yes (default collapsed)
+
+**Self Assessment variant:** This **entire section is hidden** — **FR-18.7**.
 
 | # | Field Label | Input Type | Required | DB Column | Notes |
 |---|-------------|------------|----------|-----------|-------|
@@ -507,6 +552,8 @@ The New Client form is organised into **13 collapsible sections**. Each section 
 | 14 | PAYE Records Received | Date | No | `paye_details.records_received` | |
 | 15 | PAYE Progress Note | Textarea | No | `paye_details.progress_note` | |
 | 16 | General Notes | Textarea | No | `paye_details.general_notes` | |
+
+**Self Assessment variant — additional fields (within PAYE area):** Under **Auto-enrolment**, immediately **below** “Auto-enrolment latest action”, add textarea **Missing records**. Under **P11D**, immediately **below** “P11D latest action”, add textarea **Missing records**. (DB columns to be added to extended PAYE / nested structures per implementation — see [Section 9.7](#97-paye-details).)
 
 ---
 
@@ -650,9 +697,91 @@ This section records **parity expectations** against Bright Manager, informed by
 | **Add client** | Standard save to client list or show. |
 | **Add and create onboarding workflow** | Save the client then take the user to the **next step for onboarding** (e.g. client show with onboarding hint, or tasks view filtered for that client) so practice staff can continue setup immediately. |
 
+### 8.7 Self Assessment client type (summary)
+
+| Topic | Target behaviour |
+|-------|------------------|
+| **Detection** | When `client_type` (or equivalent) is **Self Assessment**, apply Section 9 UI and FR-18–FR-20. |
+| **Data reset on type change** | Switching an existing client **to** Self Assessment clears incompatible services and records (**FR-20.1**, **BR-13**). |
+| **Tasks** | SA-specific task rules in **FR-19** (no Companies House accounts filing task from Accounts; new SA/MTD tasks and tabs as specified). |
+
 ---
 
-## 9. Future Modules (Out of Scope)
+## 9. Self Assessment client type — forms, services & tasks
+
+This section restates the **Self Assessment workflow** from *BrightManager Docs* (Self Assessment workflow PDF). It governs how the client form and task generation **differ** from the standard client type when **Client Type = Self Assessment**.
+
+### 9.1 Required information
+
+| Change | Detail |
+|--------|--------|
+| **Name** | **Removed** — no client name field in this section for Self Assessment. |
+| **Complete Credit Check** | **Removed** — button/control not shown. |
+| Other fields | Partner, Manager, and remaining required-information rules follow product defaults unless otherwise specified. |
+
+### 9.2 Company details → Business details
+
+| Change | Detail |
+|--------|--------|
+| **Section replacement** | **Company details** is replaced by **Business details**. |
+| **Content** | **Completely new** field set (not the standard Companies House–oriented company block). Exact fields and DB mapping are **TBD** in schema/design; implement as a dedicated business-details model or conditional UI on `company_details` / successor table as architecture dictates. |
+
+### 9.3 Main contact & secondary contact
+
+| Area | Change |
+|------|--------|
+| **Main contact** | Same fields as standard **except** **Create Self Assessment Client** toggle (and fee) is **removed**. |
+| **Secondary contact** | Same as standard **except** **Create Self Assessment Client** toggle is **removed**. A **message** shall appear at the **top** of the secondary contact form (wording TBD). |
+
+### 9.4 Services required
+
+| Change | Detail |
+|--------|--------|
+| **Removed toggles** | **CT600 Return**, **Confirmation Statement**. |
+| **Additional toggles** | **Main Contact SA**, **Self Assessment Tax Return**, **MTD Quarterly Filing**, **MTD Final Declaration**. |
+| **Follow-up** | How each selection affects automated tasks may be refined in Task Management / service rules. |
+
+### 9.5 Confirmation statement
+
+| Change | Detail |
+|--------|--------|
+| **Section** | **Entire form/section removed** for Self Assessment clients. |
+
+### 9.6 Accounts and returns details
+
+| Change | Detail |
+|--------|--------|
+| **Form** | A **new** Accounts & Returns form is displayed (distinct from Section 7.6 default). Structure and persistence to be specified in design/implementation. |
+
+### 9.7 PAYE details
+
+| Change | Detail |
+|--------|--------|
+| **Base form** | Same as standard PAYE, with **minor additions** only. |
+| **Auto-enrolment** | Below the **Auto-enrolment** sub-heading and **below** **Auto-enrolment latest action**, add textarea **Missing records**. |
+| **P11D** | Below the **P11D** sub-heading and **below** **P11D latest action**, add textarea **Missing records**. |
+
+### 9.8 Task generation (Self Assessment)
+
+| Service / area | Behaviour |
+|----------------|-----------|
+| **Accounts** | **Companies House Accounts Filing** task is **not** created for Self Assessment clients. |
+| **Main Contact SA** (new) | **No** task and **no** tab. |
+| **Self Assessment Tax Return** (new) | **Task 1:** SA Tax Return **Preparation**. **Task 2:** SA Tax Return **Filing**. A **new tab** is created in the task UI for this service. |
+| **MTD Quarterly Filing** (new) | **Task 1:** MTD Return **Preparation**. **Task 2:** MTD Return **Filing**. **New tab** created. |
+| **MTD Final Declaration** (new) | **Task 1:** MTD Return **Preparation**. **Task 2:** MTD Return **Filing**. **No** tab created. |
+
+*(Source PDF used “PERPARATION”; requirements use standard spelling **Preparation**.)*
+
+### 9.9 Client type changed to Self Assessment
+
+| Rule | Detail |
+|------|--------|
+| **Reset** | If services were selected and/or records entered, then **Client Type** is changed **to Self Assessment**, **all selected services and entered records** affected by the switch shall be **cleared** so the user starts from a clean Self Assessment workflow. |
+
+---
+
+## 10. Future Modules (Out of Scope)
 
 The following modules are planned for future phases and will extend the database schema:
 

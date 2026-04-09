@@ -17,6 +17,7 @@ class P11dDetail extends Model
         'latest_action_date',
         'records_received',
         'progress_note',
+        'missing_records',
     ];
 
     protected $casts = [

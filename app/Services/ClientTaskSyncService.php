@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\ClientService;
+use App\Models\ClientType;
 use App\Models\Task;
 use App\Models\TaskType;
 use Carbon\Carbon;
@@ -20,6 +21,7 @@ class ClientTaskSyncService
         }
 
         $client->load([
+            'clientType',
             'accountsReturn',
             'confirmationStatement',
             'vatDetail.vatFrequency',
@@ -28,6 +30,8 @@ class ClientTaskSyncService
             'autoEnrolment',
             'p11dDetail',
         ]);
+
+        $isSelfAssessment = $client->clientType?->name === ClientType::NAME_SELF_ASSESSMENT;
 
         $enabledIds = ClientService::query()
             ->where('client_id', $client->id)
@@ -63,6 +67,10 @@ class ClientTaskSyncService
             ->get();
 
         foreach ($taskTypes as $type) {
+            if ($isSelfAssessment && $type->slug === 'ch_submission') {
+                continue;
+            }
+
             if ($type->recurrence === 'one_off') {
                 $alreadyExists = Task::query()
                     ->where('client_id', $client->id)

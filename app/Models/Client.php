@@ -66,6 +66,11 @@ class Client extends Model
         return $this->hasOne(CompanyDetail::class);
     }
 
+    public function businessDetail(): HasOne
+    {
+        return $this->hasOne(BusinessDetail::class);
+    }
+
     public function contacts(): BelongsToMany
     {
         return $this->belongsToMany(Contact::class, 'client_contacts')
