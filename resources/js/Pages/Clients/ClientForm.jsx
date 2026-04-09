@@ -244,7 +244,8 @@ export default function ClientForm({
                     {isSelfAssessment && (
                         <p className="text-sm text-slate-600">
                             Client display name is derived from the main contact when you save (Self Assessment
-                            workflow).
+                            workflow). Trading name, address, UTR, and contact details for the business are in the{' '}
+                            <strong className="font-medium text-slate-800">Business details</strong> section below.
                         </p>
                     )}
                     <div>
@@ -366,33 +367,8 @@ export default function ClientForm({
                 </div>
             </details>
 
-            <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
-                <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
-                    Internal reference
-                </summary>
-                <div className="px-6 py-6">
-                    <label htmlFor="internal_reference" className="label-field">
-                        Internal reference
-                    </label>
-                    <input
-                        id="internal_reference"
-                        type="text"
-                        className="input-field"
-                        value={form.data.internal_reference}
-                        onChange={(e) => form.setData('internal_reference', e.target.value)}
-                        placeholder={mode === 'create' ? 'Leave blank to auto-generate' : ''}
-                    />
-                    <p className="mt-1 text-xs text-slate-500">
-                        Unique code for your practice. Leave empty on create to generate automatically.
-                    </p>
-                    {form.errors.internal_reference && (
-                        <p className="mt-1 text-sm text-red-600">{form.errors.internal_reference}</p>
-                    )}
-                </div>
-            </details>
-
             {isSelfAssessment && (
-            <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
+            <details open className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
                 <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
                     Business details
                 </summary>
@@ -454,6 +430,31 @@ export default function ClientForm({
                 </div>
             </details>
             )}
+
+            <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
+                <summary className="cursor-pointer list-none border-b border-slate-100 px-6 py-4 text-base font-semibold text-slate-900">
+                    Internal reference
+                </summary>
+                <div className="px-6 py-6">
+                    <label htmlFor="internal_reference" className="label-field">
+                        Internal reference
+                    </label>
+                    <input
+                        id="internal_reference"
+                        type="text"
+                        className="input-field"
+                        value={form.data.internal_reference}
+                        onChange={(e) => form.setData('internal_reference', e.target.value)}
+                        placeholder={mode === 'create' ? 'Leave blank to auto-generate' : ''}
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                        Unique code for your practice. Leave empty on create to generate automatically.
+                    </p>
+                    {form.errors.internal_reference && (
+                        <p className="mt-1 text-sm text-red-600">{form.errors.internal_reference}</p>
+                    )}
+                </div>
+            </details>
 
             {!isSelfAssessment && (
             <details className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-slate-200/60">
