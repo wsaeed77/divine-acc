@@ -27,6 +27,11 @@ class AccountsReturn extends Model
         'progress_note',
         'sa_income_overview',
         'sa_notes',
+        'sa_tax_year',
+        'sa_tax_amount_due_1',
+        'sa_tax_amount_due_2',
+        'sa_tax_amount_due_3',
+        'sa_missing_records',
     ];
 
     protected $casts = [
@@ -40,6 +45,9 @@ class AccountsReturn extends Model
         'ch_email_reminder' => 'boolean',
         'latest_action_date' => 'date',
         'records_received' => 'date',
+        'sa_tax_amount_due_1' => 'decimal:2',
+        'sa_tax_amount_due_2' => 'decimal:2',
+        'sa_tax_amount_due_3' => 'decimal:2',
     ];
 
     public function client(): BelongsTo

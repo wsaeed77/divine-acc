@@ -13,10 +13,22 @@ class BusinessDetail extends Model
         'client_id',
         'trading_name',
         'business_address',
+        'commenced_trading',
+        'ceased_trading',
+        'registered_for_sa',
+        'turnover',
         'nature_of_business',
+        'mtd_qualifying_year',
         'utr',
         'telephone',
         'email',
+    ];
+
+    protected $casts = [
+        'commenced_trading' => 'date',
+        'ceased_trading' => 'date',
+        'registered_for_sa' => 'date',
+        'turnover' => 'decimal:2',
     ];
 
     public function client(): BelongsTo

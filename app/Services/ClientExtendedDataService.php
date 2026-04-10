@@ -633,6 +633,11 @@ class ClientExtendedDataService
             'progress_note' => '',
             'sa_income_overview' => '',
             'sa_notes' => '',
+            'sa_tax_year' => '',
+            'sa_tax_amount_due_1' => '',
+            'sa_tax_amount_due_2' => '',
+            'sa_tax_amount_due_3' => '',
+            'sa_missing_records' => '',
         ];
     }
 
@@ -810,6 +815,11 @@ class ClientExtendedDataService
             'progress_note' => $m->progress_note,
             'sa_income_overview' => $m->sa_income_overview,
             'sa_notes' => $m->sa_notes,
+            'sa_tax_year' => $m->sa_tax_year ?? '',
+            'sa_tax_amount_due_1' => $m->sa_tax_amount_due_1 !== null ? (string) $m->sa_tax_amount_due_1 : '',
+            'sa_tax_amount_due_2' => $m->sa_tax_amount_due_2 !== null ? (string) $m->sa_tax_amount_due_2 : '',
+            'sa_tax_amount_due_3' => $m->sa_tax_amount_due_3 !== null ? (string) $m->sa_tax_amount_due_3 : '',
+            'sa_missing_records' => $m->sa_missing_records,
         ];
     }
 
@@ -825,7 +835,12 @@ class ClientExtendedDataService
         return [
             'trading_name' => $m->trading_name,
             'business_address' => $m->business_address,
+            'commenced_trading' => $m->commenced_trading?->format('Y-m-d'),
+            'ceased_trading' => $m->ceased_trading?->format('Y-m-d'),
+            'registered_for_sa' => $m->registered_for_sa?->format('Y-m-d'),
+            'turnover' => $m->turnover !== null ? (string) $m->turnover : '',
             'nature_of_business' => $m->nature_of_business,
+            'mtd_qualifying_year' => $m->mtd_qualifying_year ?? '',
             'utr' => $m->utr,
             'telephone' => $m->telephone,
             'email' => $m->email,
@@ -840,7 +855,12 @@ class ClientExtendedDataService
         return [
             'trading_name' => '',
             'business_address' => '',
+            'commenced_trading' => '',
+            'ceased_trading' => '',
+            'registered_for_sa' => '',
+            'turnover' => '',
             'nature_of_business' => '',
+            'mtd_qualifying_year' => '',
             'utr' => '',
             'telephone' => '',
             'email' => '',
@@ -856,7 +876,12 @@ class ClientExtendedDataService
         return [
             'trading_name' => $d['trading_name'] ?: null,
             'business_address' => $d['business_address'] ?: null,
+            'commenced_trading' => ! empty($d['commenced_trading']) ? $d['commenced_trading'] : null,
+            'ceased_trading' => ! empty($d['ceased_trading']) ? $d['ceased_trading'] : null,
+            'registered_for_sa' => ! empty($d['registered_for_sa']) ? $d['registered_for_sa'] : null,
+            'turnover' => isset($d['turnover']) && $d['turnover'] !== '' ? $d['turnover'] : null,
             'nature_of_business' => $d['nature_of_business'] ?: null,
+            'mtd_qualifying_year' => ! empty($d['mtd_qualifying_year']) ? $d['mtd_qualifying_year'] : null,
             'utr' => $d['utr'] ?: null,
             'telephone' => $d['telephone'] ?: null,
             'email' => $d['email'] ?: null,
@@ -1058,6 +1083,11 @@ class ClientExtendedDataService
             'progress_note' => $d['progress_note'] ?: null,
             'sa_income_overview' => $d['sa_income_overview'] ?: null,
             'sa_notes' => $d['sa_notes'] ?: null,
+            'sa_tax_year' => ! empty($d['sa_tax_year']) ? $d['sa_tax_year'] : null,
+            'sa_tax_amount_due_1' => isset($d['sa_tax_amount_due_1']) && $d['sa_tax_amount_due_1'] !== '' ? $d['sa_tax_amount_due_1'] : null,
+            'sa_tax_amount_due_2' => isset($d['sa_tax_amount_due_2']) && $d['sa_tax_amount_due_2'] !== '' ? $d['sa_tax_amount_due_2'] : null,
+            'sa_tax_amount_due_3' => isset($d['sa_tax_amount_due_3']) && $d['sa_tax_amount_due_3'] !== '' ? $d['sa_tax_amount_due_3'] : null,
+            'sa_missing_records' => $d['sa_missing_records'] ?: null,
         ];
     }
 
@@ -1302,7 +1332,12 @@ class ClientExtendedDataService
             'business' => ['nullable', 'array'],
             'business.trading_name' => ['nullable', 'string', 'max:255'],
             'business.business_address' => ['nullable', 'string', 'max:5000'],
+            'business.commenced_trading' => ['nullable', 'date'],
+            'business.ceased_trading' => ['nullable', 'date'],
+            'business.registered_for_sa' => ['nullable', 'date'],
+            'business.turnover' => ['nullable', 'numeric', 'min:0'],
             'business.nature_of_business' => ['nullable', 'string', 'max:255'],
+            'business.mtd_qualifying_year' => ['nullable', 'string', 'max:20'],
             'business.utr' => ['nullable', 'string', 'max:20'],
             'business.telephone' => ['nullable', 'string', 'max:30'],
             'business.email' => ['nullable', 'email', 'max:255'],
@@ -1324,6 +1359,11 @@ class ClientExtendedDataService
             'accounts_returns.progress_note' => ['nullable', 'string'],
             'accounts_returns.sa_income_overview' => ['nullable', 'string'],
             'accounts_returns.sa_notes' => ['nullable', 'string'],
+            'accounts_returns.sa_tax_year' => ['nullable', 'string', 'max:20'],
+            'accounts_returns.sa_tax_amount_due_1' => ['nullable', 'numeric', 'min:0'],
+            'accounts_returns.sa_tax_amount_due_2' => ['nullable', 'numeric', 'min:0'],
+            'accounts_returns.sa_tax_amount_due_3' => ['nullable', 'numeric', 'min:0'],
+            'accounts_returns.sa_missing_records' => ['nullable', 'string'],
 
             'confirmation_statement' => ['nullable', 'array'],
             'confirmation_statement.statement_date' => ['nullable', 'date'],

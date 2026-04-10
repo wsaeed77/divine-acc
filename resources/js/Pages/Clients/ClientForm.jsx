@@ -7,11 +7,42 @@ function emptyBusiness() {
     return {
         trading_name: '',
         business_address: '',
+        commenced_trading: '',
+        ceased_trading: '',
+        registered_for_sa: '',
+        turnover: '',
         nature_of_business: '',
+        mtd_qualifying_year: '',
         utr: '',
         telephone: '',
         email: '',
     };
+}
+
+/** Current UK tax year start calendar year (6 April – 5 April). */
+function currentUkTaxYearStartYear() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const day = d.getDate();
+    if (m < 3) {
+        return y - 1;
+    }
+    if (m > 3) {
+        return y;
+    }
+    return day < 6 ? y - 1 : y;
+}
+
+/** Labels like 2024/25 for MTD qualifying year. */
+function ukTaxYearChoices() {
+    const start = currentUkTaxYearStartYear();
+    const years = [];
+    for (let i = 0; i < 12; i++) {
+        const a = start - i;
+        years.push(`${a}/${String(a + 1).slice(-2)}`);
+    }
+    return years;
 }
 
 function emptyCompany() {
@@ -101,6 +132,7 @@ export default function ClientForm({
 
     const c = form.data.company;
     const b = form.data.business ?? emptyBusiness();
+    const mtdYearOptions = useMemo(() => ukTaxYearChoices(), []);
 
     const isSelfAssessment = useMemo(() => {
         if (selfAssessmentTypeId == null) {
@@ -241,13 +273,7 @@ export default function ClientForm({
                             )}
                         </div>
                     )}
-                    {isSelfAssessment && (
-                        <p className="text-sm text-slate-600">
-                            Client display name is derived from the main contact when you save (Self Assessment
-                            workflow). Trading name, address, UTR, and contact details for the business are in the{' '}
-                            <strong className="font-medium text-slate-800">Business details</strong> section below.
-                        </p>
-                    )}
+                    {/* SA: name is derived from the main contact on save — no name input shown */}
                     <div>
                         <label htmlFor="client_type_id" className="label-field">
                             Client type <span className="text-red-500">*</span>
@@ -316,6 +342,7 @@ export default function ClientForm({
                             )}
                         </div>
                     )}
+                    {!isSelfAssessment && (
                     <div className="rounded-lg bg-slate-50 px-4 py-3 ring-1 ring-slate-200/80">
                         <label className="flex items-start gap-3">
                             <input
@@ -335,6 +362,7 @@ export default function ClientForm({
                             </span>
                         </label>
                     </div>
+                    )}
                     {!isSelfAssessment && (
                         <div className="flex flex-wrap items-center gap-6">
                             <label className="flex items-center gap-2">
@@ -374,7 +402,7 @@ export default function ClientForm({
                 </summary>
                 <div className="grid gap-5 px-6 py-6 sm:grid-cols-2">
                     <div className="sm:col-span-2">
-                        <label className="label-field">Trading / business name</label>
+                        <label className="label-field">Trading as</label>
                         <input
                             type="text"
                             className="input-field"
@@ -383,7 +411,7 @@ export default function ClientForm({
                         />
                     </div>
                     <div className="sm:col-span-2">
-                        <label className="label-field">Business address</label>
+                        <label className="label-field">Trading address</label>
                         <textarea
                             rows={3}
                             className="input-field"
@@ -392,6 +420,44 @@ export default function ClientForm({
                         />
                     </div>
                     <div>
+                        <label className="label-field">Commenced trading</label>
+                        <input
+                            type="date"
+                            className="input-field"
+                            value={b.commenced_trading || ''}
+                            onChange={(e) => setBusiness('commenced_trading', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="label-field">Ceased trading</label>
+                        <input
+                            type="date"
+                            className="input-field"
+                            value={b.ceased_trading || ''}
+                            onChange={(e) => setBusiness('ceased_trading', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="label-field">Registered for SA</label>
+                        <input
+                            type="date"
+                            className="input-field"
+                            value={b.registered_for_sa || ''}
+                            onChange={(e) => setBusiness('registered_for_sa', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="label-field">Turnover (£)</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="input-field"
+                            value={b.turnover ?? ''}
+                            onChange={(e) => setBusiness('turnover', e.target.value)}
+                        />
+                    </div>
+                    <div className="sm:col-span-2">
                         <label className="label-field">Nature of business</label>
                         <input
                             type="text"
@@ -399,6 +465,21 @@ export default function ClientForm({
                             value={b.nature_of_business ?? ''}
                             onChange={(e) => setBusiness('nature_of_business', e.target.value)}
                         />
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label className="label-field">MTD qualifying year</label>
+                        <select
+                            className="input-field"
+                            value={b.mtd_qualifying_year ?? ''}
+                            onChange={(e) => setBusiness('mtd_qualifying_year', e.target.value)}
+                        >
+                            <option value="">—</option>
+                            {mtdYearOptions.map((y) => (
+                                <option key={y} value={y}>
+                                    {y}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div>
                         <label className="label-field">UTR</label>

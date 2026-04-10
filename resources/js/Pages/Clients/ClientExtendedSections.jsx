@@ -1,9 +1,167 @@
+import { useMemo } from 'react';
+
 function FieldError({ form, name }) {
     const msg = form.errors[name];
     if (!msg) {
         return null;
     }
     return <p className="mt-1 text-sm text-red-600">{msg}</p>;
+}
+
+function currentUkTaxYearStartYear() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const day = d.getDate();
+    if (m < 3) return y - 1;
+    if (m > 3) return y;
+    return day < 6 ? y - 1 : y;
+}
+
+function ukTaxYearChoices() {
+    const start = currentUkTaxYearStartYear();
+    const years = [];
+    for (let i = 0; i < 12; i++) {
+        const a = start - i;
+        years.push(`${a}/${String(a + 1).slice(-2)}`);
+    }
+    return years;
+}
+
+function saTaxDueLabels(taxYear) {
+    if (!taxYear) return ['Tax Amount Due (1st payment)', 'Tax Amount Due (balancing)', 'Tax Amount Due (2nd payment)'];
+    const parts = taxYear.split('/');
+    const startYear = parseInt(parts[0], 10);
+    if (isNaN(startYear)) return ['Tax Amount Due (1st payment)', 'Tax Amount Due (balancing)', 'Tax Amount Due (2nd payment)'];
+    const endYear = startYear + 1;
+    return [
+        `Tax Amount Due (31 July ${endYear})`,
+        `Tax Amount Due (31 Jan ${endYear + 1})`,
+        `Tax Amount Due (31 July ${endYear + 1})`,
+    ];
+}
+
+function SaAccountsReturns({ ar, s, lookups, sel }) {
+    const taxYearOptions = useMemo(() => ukTaxYearChoices(), []);
+    const dueLabels = useMemo(() => saTaxDueLabels(ar.sa_tax_year), [ar.sa_tax_year]);
+
+    return (
+        <div className="grid gap-4 px-6 py-6 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+                <label className="label-field">Accounts period end</label>
+                <input
+                    type="date"
+                    className="input-field"
+                    value={ar.accounts_period_end || ''}
+                    onChange={(e) => s('accounts_returns', 'accounts_period_end', e.target.value)}
+                />
+            </div>
+            <div className="sm:col-span-2">
+                <label className="label-field">Tax year</label>
+                <select
+                    className="input-field"
+                    value={ar.sa_tax_year ?? ''}
+                    onChange={(e) => s('accounts_returns', 'sa_tax_year', e.target.value)}
+                >
+                    <option value="">—</option>
+                    {taxYearOptions.map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                    ))}
+                </select>
+            </div>
+            <div>
+                <label className="label-field">{dueLabels[0]} (£)</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input-field"
+                    value={ar.sa_tax_amount_due_1 ?? ''}
+                    onChange={(e) => s('accounts_returns', 'sa_tax_amount_due_1', e.target.value)}
+                />
+            </div>
+            <div>
+                <label className="label-field">{dueLabels[1]} (£)</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input-field"
+                    value={ar.sa_tax_amount_due_2 ?? ''}
+                    onChange={(e) => s('accounts_returns', 'sa_tax_amount_due_2', e.target.value)}
+                />
+            </div>
+            <div className="sm:col-span-2">
+                <label className="label-field">{dueLabels[2]} (£)</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input-field"
+                    value={ar.sa_tax_amount_due_3 ?? ''}
+                    onChange={(e) => s('accounts_returns', 'sa_tax_amount_due_3', e.target.value)}
+                />
+            </div>
+            <div className="sm:col-span-2">
+                <label className="label-field">Tax office</label>
+                <select
+                    className="input-field"
+                    value={ar.tax_office_id ?? ''}
+                    onChange={(e) => s('accounts_returns', 'tax_office_id', e.target.value)}
+                >
+                    <option value="">—</option>
+                    {sel(lookups.tax_offices)}
+                </select>
+            </div>
+            <div className="sm:col-span-2">
+                <label className="label-field">Accounts latest action</label>
+                <select
+                    className="input-field"
+                    value={ar.latest_action_id ?? ''}
+                    onChange={(e) => s('accounts_returns', 'latest_action_id', e.target.value)}
+                >
+                    <option value="">—</option>
+                    {sel(lookups.action_statuses)}
+                </select>
+            </div>
+            <div className="sm:col-span-2">
+                <label className="label-field">Accounts missing records</label>
+                <textarea
+                    rows={3}
+                    className="input-field"
+                    value={ar.sa_missing_records ?? ''}
+                    onChange={(e) => s('accounts_returns', 'sa_missing_records', e.target.value)}
+                />
+            </div>
+            <div>
+                <label className="label-field">Accounts latest action date</label>
+                <input
+                    type="date"
+                    className="input-field"
+                    value={ar.latest_action_date || ''}
+                    onChange={(e) => s('accounts_returns', 'latest_action_date', e.target.value)}
+                />
+            </div>
+            <div>
+                <label className="label-field">Accounts records received</label>
+                <input
+                    type="date"
+                    className="input-field"
+                    value={ar.records_received || ''}
+                    onChange={(e) => s('accounts_returns', 'records_received', e.target.value)}
+                />
+            </div>
+            <div className="sm:col-span-2">
+                <label className="label-field">Accounts progress note</label>
+                <textarea
+                    rows={3}
+                    className="input-field"
+                    value={ar.progress_note ?? ''}
+                    onChange={(e) => s('accounts_returns', 'progress_note', e.target.value)}
+                />
+            </div>
+        </div>
+    );
 }
 
 export default function ClientExtendedSections({ form, lookups, isSelfAssessment = false }) {
@@ -464,10 +622,12 @@ export default function ClientExtendedSections({ form, lookups, isSelfAssessment
                         </thead>
                         <tbody>
                             {(form.data.services ?? []).map((row, idx) => {
-                                if (
-                                    isSelfAssessment &&
-                                    (row.slug === 'ct600_return' || row.slug === 'confirmation_statement')
-                                ) {
+                                const saOnlySlugs = ['main_contact_sa', 'self_assessment_tax_return', 'mtd_quarterly_filing', 'mtd_final_declaration'];
+                                const standardOnlySlugs = ['ct600_return', 'confirmation_statement'];
+                                if (isSelfAssessment && standardOnlySlugs.includes(row.slug)) {
+                                    return null;
+                                }
+                                if (!isSelfAssessment && saOnlySlugs.includes(row.slug)) {
                                     return null;
                                 }
                                 return (
@@ -605,26 +765,7 @@ export default function ClientExtendedSections({ form, lookups, isSelfAssessment
                     Accounts &amp; returns
                 </summary>
                 {isSelfAssessment ? (
-                <div className="grid gap-4 px-6 py-6 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                        <label className="label-field">Income overview (Self Assessment)</label>
-                        <textarea
-                            rows={4}
-                            className="input-field"
-                            value={ar.sa_income_overview ?? ''}
-                            onChange={(e) => s('accounts_returns', 'sa_income_overview', e.target.value)}
-                        />
-                    </div>
-                    <div className="sm:col-span-2">
-                        <label className="label-field">Notes</label>
-                        <textarea
-                            rows={4}
-                            className="input-field"
-                            value={ar.sa_notes ?? ''}
-                            onChange={(e) => s('accounts_returns', 'sa_notes', e.target.value)}
-                        />
-                    </div>
-                </div>
+                <SaAccountsReturns ar={ar} s={s} lookups={lookups} sel={sel} />
                 ) : (
                 <div className="grid gap-4 px-6 py-6 sm:grid-cols-2">
                     <div>
@@ -1263,7 +1404,7 @@ export default function ClientExtendedSections({ form, lookups, isSelfAssessment
                             Grouped under PAYE as in Bright Manager (also available as a separate service).
                         </p>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <div>
+                            <div className="sm:col-span-2">
                                 <label className="label-field">Latest action</label>
                                 <select
                                     className="input-field"
@@ -1273,15 +1414,6 @@ export default function ClientExtendedSections({ form, lookups, isSelfAssessment
                                     <option value="">—</option>
                                     {sel(lookups.action_statuses)}
                                 </select>
-                            </div>
-                            <div>
-                                <label className="label-field">Latest action date</label>
-                                <input
-                                    type="date"
-                                    className="input-field"
-                                    value={ae.latest_action_date || ''}
-                                    onChange={(e) => s('auto_enrolment', 'latest_action_date', e.target.value)}
-                                />
                             </div>
                             {isSelfAssessment && (
                                 <div className="sm:col-span-2">
@@ -1294,6 +1426,15 @@ export default function ClientExtendedSections({ form, lookups, isSelfAssessment
                                     />
                                 </div>
                             )}
+                            <div>
+                                <label className="label-field">Latest action date</label>
+                                <input
+                                    type="date"
+                                    className="input-field"
+                                    value={ae.latest_action_date || ''}
+                                    onChange={(e) => s('auto_enrolment', 'latest_action_date', e.target.value)}
+                                />
+                            </div>
                             <div>
                                 <label className="label-field">Records received</label>
                                 <input
@@ -1417,7 +1558,7 @@ export default function ClientExtendedSections({ form, lookups, isSelfAssessment
                                     onChange={(e) => s('p11d', 'latest_submitted', e.target.value)}
                                 />
                             </div>
-                            <div>
+                            <div className="sm:col-span-2">
                                 <label className="label-field">Latest action</label>
                                 <select
                                     className="input-field"
@@ -1427,15 +1568,6 @@ export default function ClientExtendedSections({ form, lookups, isSelfAssessment
                                     <option value="">—</option>
                                     {sel(lookups.action_statuses)}
                                 </select>
-                            </div>
-                            <div>
-                                <label className="label-field">Latest action date</label>
-                                <input
-                                    type="date"
-                                    className="input-field"
-                                    value={p11d.latest_action_date || ''}
-                                    onChange={(e) => s('p11d', 'latest_action_date', e.target.value)}
-                                />
                             </div>
                             {isSelfAssessment && (
                                 <div className="sm:col-span-2">
@@ -1448,6 +1580,15 @@ export default function ClientExtendedSections({ form, lookups, isSelfAssessment
                                     />
                                 </div>
                             )}
+                            <div>
+                                <label className="label-field">Latest action date</label>
+                                <input
+                                    type="date"
+                                    className="input-field"
+                                    value={p11d.latest_action_date || ''}
+                                    onChange={(e) => s('p11d', 'latest_action_date', e.target.value)}
+                                />
+                            </div>
                             <div>
                                 <label className="label-field">Records received</label>
                                 <input
