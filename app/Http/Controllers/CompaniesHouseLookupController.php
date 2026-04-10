@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ClientType;
 use App\Models\CompanyStatus;
 use App\Models\SicCode;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -81,6 +82,8 @@ class CompaniesHouseLookupController extends Controller
 
         $suggestedClientTypeId = $this->suggestClientTypeId($data);
 
+        $filingDates = $this->extractFilingDates($data);
+
         return response()->json([
             'suggested_name' => $data['company_name'] ?? null,
             'suggested_client_type_id' => $suggestedClientTypeId,
@@ -91,6 +94,7 @@ class CompaniesHouseLookupController extends Controller
                 'registered_address' => $registeredAddress,
                 'sic_code_id' => $sicCodeId ? (string) $sicCodeId : '',
             ],
+            'filing_dates' => $filingDates,
         ]);
     }
 
@@ -112,6 +116,43 @@ class CompaniesHouseLookupController extends Controller
         $id = ClientType::query()->where('name', $name)->where('is_active', true)->value('id');
 
         return $id !== null ? (string) $id : null;
+    }
+
+    /**
+     * Extract accounts and confirmation statement filing dates from the CH profile.
+     *
+     * @param  array<string, mixed>  $profile
+     * @return array<string, string|null>
+     */
+    private function extractFilingDates(array $profile): array
+    {
+        $accounts = $profile['accounts'] ?? [];
+        $chYearEnd = $accounts['next_made_up_to'] ?? ($accounts['next_accounts']['period_end_on'] ?? null);
+        $chAccountsNextDue = $accounts['next_due'] ?? ($accounts['next_accounts']['due_on'] ?? null);
+
+        $hmrcYearEnd = $chYearEnd;
+
+        $ct600Due = null;
+        if ($chYearEnd) {
+            try {
+                $ct600Due = Carbon::parse($chYearEnd)->addMonths(12)->format('Y-m-d');
+            } catch (\Throwable) {
+                // leave null
+            }
+        }
+
+        $cs = $profile['confirmation_statement'] ?? [];
+        $csDate = $cs['next_made_up_to'] ?? null;
+        $csDue = $cs['next_due'] ?? null;
+
+        return [
+            'ch_year_end' => $chYearEnd ?: null,
+            'ch_accounts_next_due' => $chAccountsNextDue ?: null,
+            'hmrc_year_end' => $hmrcYearEnd ?: null,
+            'ct600_due' => $ct600Due,
+            'confirmation_statement_date' => $csDate ?: null,
+            'confirmation_statement_due' => $csDue ?: null,
+        ];
     }
 
     private function mapCompanyStatus(?string $apiStatus): ?string

@@ -215,6 +215,23 @@ export default function ClientForm({
             if (data.company) {
                 form.setData('company', { ...form.data.company, ...data.company });
             }
+            if (data.filing_dates) {
+                const fd = data.filing_dates;
+                const ar = form.data.accounts_returns ?? {};
+                form.setData('accounts_returns', {
+                    ...ar,
+                    ch_year_end: fd.ch_year_end || ar.ch_year_end || '',
+                    ch_accounts_next_due: fd.ch_accounts_next_due || ar.ch_accounts_next_due || '',
+                    hmrc_year_end: fd.hmrc_year_end || ar.hmrc_year_end || '',
+                    ct600_due: fd.ct600_due || ar.ct600_due || '',
+                });
+                const cs = form.data.confirmation_statement ?? {};
+                form.setData('confirmation_statement', {
+                    ...cs,
+                    statement_date: fd.confirmation_statement_date || cs.statement_date || '',
+                    statement_due: fd.confirmation_statement_due || cs.statement_due || '',
+                });
+            }
             setChMessage('Loaded from Companies House.');
             setChModalOpen(false);
         } finally {
