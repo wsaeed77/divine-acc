@@ -13,6 +13,7 @@ class ClientTaskSyncService
 {
     /**
      * Create / reactivate / switch off tasks when client services change (FR-TM-01, FR-TM-10).
+     * Runs only for confirmed clients (is_prospect = false — “Confirmed client” on the form).
      */
     public function syncForClient(Client $client): void
     {

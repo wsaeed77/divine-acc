@@ -385,8 +385,8 @@ export default function ClientForm({
                                 </span>
                                 <span className="mt-1 block text-xs text-slate-600">
                                     Bright Manager does not create tasks for prospects. Tick this when the
-                                    engagement is confirmed, or enable at least one service below — either
-                                    action allows tasks to sync.
+                                    engagement is confirmed so automated tasks can sync from your enabled
+                                    services.
                                 </span>
                             </span>
                         </label>
