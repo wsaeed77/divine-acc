@@ -371,7 +371,6 @@ export default function ClientForm({
                             )}
                         </div>
                     )}
-                    {!isSelfAssessment && (
                     <div className="rounded-lg bg-slate-50 px-4 py-3 ring-1 ring-slate-200/80">
                         <label className="flex items-start gap-3">
                             <input
@@ -386,12 +385,12 @@ export default function ClientForm({
                                 </span>
                                 <span className="mt-1 block text-xs text-slate-600">
                                     Bright Manager does not create tasks for prospects. Tick this when the
-                                    engagement is confirmed so tasks can sync from enabled services.
+                                    engagement is confirmed, or enable at least one service below — either
+                                    action allows tasks to sync.
                                 </span>
                             </span>
                         </label>
                     </div>
-                    )}
                     {!isSelfAssessment && (
                         <div className="flex flex-wrap items-center gap-6">
                             <label className="flex items-center gap-2">

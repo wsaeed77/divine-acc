@@ -244,6 +244,13 @@ class ClientExtendedDataService
                             'fee' => $row['fee'] ?? null,
                         ]);
                 }
+
+                $anyServiceEnabled = collect($validated['services'])->contains(
+                    fn (array $row) => ! empty($row['is_enabled'])
+                );
+                if ($anyServiceEnabled) {
+                    Client::query()->whereKey($client->id)->update(['is_prospect' => false]);
+                }
             }
 
             if (isset($validated['accounts_returns'])) {
