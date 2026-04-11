@@ -28,6 +28,21 @@ function ukTaxYearChoices() {
     return years;
 }
 
+/** Next return due = VAT period end + 1 calendar month + 7 days (UTC date parts to avoid TZ drift). */
+function nextVatReturnDueFromPeriodEnd(periodEndIso) {
+    if (!periodEndIso || !/^\d{4}-\d{2}-\d{2}$/.test(periodEndIso)) {
+        return '';
+    }
+    const [y, m, d] = periodEndIso.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCMonth(dt.getUTCMonth() + 1);
+    dt.setUTCDate(dt.getUTCDate() + 7);
+    const yy = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getUTCDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+}
+
 function saTaxDueLabels(taxYear) {
     if (!taxYear) return ['Tax Amount Due (1st payment)', 'Tax Amount Due (balancing)', 'Tax Amount Due (2nd payment)'];
     const parts = taxYear.split('/');
@@ -1033,7 +1048,15 @@ export default function ClientExtendedSections({ form, lookups, isSelfAssessment
                             type="date"
                             className="input-field"
                             value={vat.vat_period_end || ''}
-                            onChange={(e) => s('vat', 'vat_period_end', e.target.value)}
+                            onChange={(e) => {
+                                const periodEnd = e.target.value;
+                                const nextDue = periodEnd ? nextVatReturnDueFromPeriodEnd(periodEnd) : '';
+                                form.setData('vat', {
+                                    ...(form.data.vat ?? {}),
+                                    vat_period_end: periodEnd,
+                                    next_return_due: nextDue,
+                                });
+                            }}
                         />
                     </div>
                     <div>

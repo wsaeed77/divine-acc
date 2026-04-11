@@ -17,6 +17,7 @@ use App\Models\P11dDetail;
 use App\Models\PayeDetail;
 use App\Models\Service;
 use App\Models\VatDetail;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -1111,10 +1112,16 @@ class ClientExtendedDataService
      */
     private function onlyVatDetail(array $d): array
     {
+        $vatPeriodEnd = $d['vat_period_end'] ?: null;
+        $nextReturnDue = $d['next_return_due'] ?: null;
+        if ($vatPeriodEnd !== null && $nextReturnDue === null) {
+            $nextReturnDue = Carbon::parse($vatPeriodEnd)->addMonth()->addDays(7)->format('Y-m-d');
+        }
+
         return [
             'vat_frequency_id' => $d['vat_frequency_id'] ?: null,
-            'vat_period_end' => $d['vat_period_end'] ?: null,
-            'next_return_due' => $d['next_return_due'] ?: null,
+            'vat_period_end' => $vatPeriodEnd,
+            'next_return_due' => $nextReturnDue,
             'vat_bill_amount' => $d['vat_bill_amount'] ?: null,
             'vat_bill_due' => $d['vat_bill_due'] ?: null,
             'latest_action_id' => $d['latest_action_id'] ?: null,
