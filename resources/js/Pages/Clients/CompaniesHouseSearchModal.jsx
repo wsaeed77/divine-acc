@@ -158,14 +158,18 @@ export default function CompaniesHouseSearchModal({ open, onClose, onApplyCompan
             className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto p-4 pt-12 sm:pt-16"
             role="presentation"
         >
-            <button
-                type="button"
-                className="fixed inset-0 z-0 border-0 bg-slate-900/50 p-0"
-                onClick={onClose}
-                aria-label="Close dialog"
+            {/* Must sit *under* the panel in the same stacking context; fixed+flex sibling order was stealing clicks in some browsers */}
+            <div
+                className="absolute inset-0 bg-slate-900/50"
+                aria-hidden="true"
+                onClick={() => {
+                    if (!loadingPreview && !applying) {
+                        onClose();
+                    }
+                }}
             />
             <div
-                className="relative z-10 mt-0 w-full max-w-2xl rounded-xl bg-white shadow-xl ring-1 ring-slate-200"
+                className="relative z-10 w-full max-w-2xl shrink-0 rounded-xl bg-white shadow-xl ring-1 ring-slate-200"
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="ch-search-title"
