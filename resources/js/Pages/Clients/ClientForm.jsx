@@ -193,11 +193,12 @@ export default function ClientForm({
         }
     };
 
-    const applyCompaniesHouseProfile = async (companyNumber) => {
+    const applyCompaniesHouseProfile = async (companyNumber, options = {}) => {
         const num = String(companyNumber ?? '').trim();
         if (!num) {
             throw new Error('Missing company number.');
         }
+        const mainContact = options.mainContact ?? null;
         setChLoading(true);
         try {
             const { data } = await window.axios.post('/lookup/companies-house', {
@@ -230,6 +231,17 @@ export default function ClientForm({
                     ...cs,
                     statement_date: fd.confirmation_statement_date || cs.statement_date || '',
                     statement_due: fd.confirmation_statement_due || cs.statement_due || '',
+                });
+            }
+            if (mainContact) {
+                const mc = form.data.main_contact ?? {};
+                form.setData('main_contact', {
+                    ...mc,
+                    first_name: mainContact.first_name ?? mc.first_name ?? '',
+                    last_name: mainContact.last_name ?? mc.last_name ?? '',
+                    ...(mainContact.date_of_birth
+                        ? { date_of_birth: mainContact.date_of_birth }
+                        : {}),
                 });
             }
             setChMessage('Loaded from Companies House.');
@@ -851,7 +863,7 @@ export default function ClientForm({
         <CompaniesHouseSearchModal
             open={chModalOpen}
             onClose={() => setChModalOpen(false)}
-            onSelectCompanyNumber={applyCompaniesHouseProfile}
+            onApplyCompaniesHouse={applyCompaniesHouseProfile}
         />
         </>
     );

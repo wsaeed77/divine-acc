@@ -3,11 +3,12 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CompaniesHouseCompanyPreviewController;
 use App\Http\Controllers\CompaniesHouseLookupController;
 use App\Http\Controllers\CompaniesHouseSearchController;
-use App\Http\Controllers\TaskController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -29,6 +30,8 @@ Route::middleware('auth')->group(function () {
         ->name('lookup.companies-house');
     Route::post('lookup/companies-house/search', CompaniesHouseSearchController::class)
         ->name('lookup.companies-house.search');
+    Route::post('lookup/companies-house/preview', CompaniesHouseCompanyPreviewController::class)
+        ->name('lookup.companies-house.preview');
 
     Route::resource('clients', ClientController::class);
 
