@@ -92,6 +92,7 @@ class ClientTaskSyncService
 
             $periodDate = $this->resolvePeriodDate($type, $client);
             $deadline = $type->deadline_manual ? null : $this->resolveDeadline($type, $client);
+            $targetDate = $this->resolveTargetDateFromChYearEnd($type, $client);
             $taskName = $this->buildTaskName($type, $client, $periodDate ?? $deadline);
 
             if ($hasActive) {
@@ -99,6 +100,20 @@ class ClientTaskSyncService
                     ->where('client_id', $client->id)
                     ->where('task_type_id', $type->id)
                     ->where('status', 'active')
+                    ->where('target_date_manual', false)
+                    ->update([
+                        'task_name' => $taskName,
+                        'period_date' => $periodDate,
+                        'deadline_date' => $deadline,
+                        'target_date' => $targetDate,
+                        'assignee_id' => $client->manager_id,
+                    ]);
+
+                Task::query()
+                    ->where('client_id', $client->id)
+                    ->where('task_type_id', $type->id)
+                    ->where('status', 'active')
+                    ->where('target_date_manual', true)
                     ->update([
                         'task_name' => $taskName,
                         'period_date' => $periodDate,
@@ -118,6 +133,8 @@ class ClientTaskSyncService
                 'assignee_id' => $client->manager_id,
                 'period_date' => $periodDate,
                 'deadline_date' => $deadline,
+                'target_date' => $targetDate,
+                'target_date_manual' => false,
             ]);
         }
     }
@@ -184,6 +201,31 @@ class ClientTaskSyncService
         [$relationTable, $column] = explode('.', $path, 2);
 
         return $this->resolveColumn($client, $relationTable, $column);
+    }
+
+    /**
+     * Firm target date for annual accounts-area tasks: CH year end + 7 days (Accounts & returns).
+     */
+    private function resolveTargetDateFromChYearEnd(TaskType $type, Client $client): ?Carbon
+    {
+        $slugs = [
+            'accounts_preparation',
+            'bookkeeping',
+            'management_accounts',
+            'ch_submission',
+            'ct600_submission',
+        ];
+
+        if (! in_array($type->slug, $slugs, true)) {
+            return null;
+        }
+
+        $chYearEnd = $this->resolveColumn($client, 'accounts_returns', 'ch_year_end');
+        if ($chYearEnd === null) {
+            return null;
+        }
+
+        return $chYearEnd->copy()->addDays(7);
     }
 
     private function resolveColumn(Client $client, string $relationTable, string $column): ?Carbon
