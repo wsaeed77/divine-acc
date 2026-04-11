@@ -15,7 +15,7 @@ class TaskTypeSeeder extends Seeder
         [
             'slug' => 'accounts_preparation',
             'name' => 'Accounts Preparation',
-            'naming_pattern' => 'Accounts Preparation Year End {dd/mm/yyyy}',
+            'naming_pattern' => 'Accounts Preparation CH year end {dd/mm/yyyy}',
             'service_slug' => 'accounts',
             'recurrence' => 'annual',
             'deadline_source' => 'accounts_returns.ch_accounts_next_due',
@@ -115,7 +115,7 @@ class TaskTypeSeeder extends Seeder
         [
             'slug' => 'bookkeeping',
             'name' => 'Bookkeeping',
-            'naming_pattern' => 'Bookkeeping Year End {dd/mm/yyyy}',
+            'naming_pattern' => 'Bookkeeping CH year end {dd/mm/yyyy}',
             'service_slug' => 'bookkeeping',
             'recurrence' => 'annual',
             'deadline_source' => 'accounts_returns.ch_accounts_next_due',
@@ -125,7 +125,7 @@ class TaskTypeSeeder extends Seeder
         [
             'slug' => 'management_accounts',
             'name' => 'Management Accounts',
-            'naming_pattern' => 'Management Accounts Year End {dd/mm/yyyy}',
+            'naming_pattern' => 'Management Accounts CH year end {dd/mm/yyyy}',
             'service_slug' => 'management_accounts',
             'recurrence' => 'annual',
             'deadline_source' => 'accounts_returns.ch_accounts_next_due',

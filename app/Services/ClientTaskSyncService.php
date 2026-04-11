@@ -173,7 +173,7 @@ class ClientTaskSyncService
         }
 
         if (in_array($type->slug, ['accounts_preparation', 'bookkeeping', 'management_accounts'], true)) {
-            return $this->resolveColumn($client, 'accounts_returns', 'accounts_period_end');
+            return $this->resolveColumn($client, 'accounts_returns', 'ch_year_end');
         }
 
         if (in_array($type->slug, ['vat_submission', 'vat_preparation'], true)) {
