@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 function MagnifyingGlassIcon() {
@@ -31,6 +31,17 @@ function chCompanyUrl(companyNumber) {
     return `https://find-and-update.company-information.service.gov.uk/company/${encodeURIComponent(n)}`;
 }
 
+/** CH search sometimes omits company_number; parse from subtitle like "16967854 - Incorporated on …" */
+function companyNumberFromRow(row) {
+    let n = String(row?.company_number ?? '').trim();
+    if (n) {
+        return n;
+    }
+    const sub = String(row?.subtitle ?? '');
+    const m = sub.match(/^(\d{6,8})\s*[-–]/);
+    return m ? m[1] : '';
+}
+
 /**
  * @param {{ open: boolean, onClose: () => void, onApplyCompaniesHouse: (companyNumber: string, options?: { mainContact?: { first_name?: string, last_name?: string, date_of_birth?: string } }) => Promise<void> }} props
  */
@@ -44,20 +55,21 @@ export default function CompaniesHouseSearchModal({ open, onClose, onApplyCompan
     const [preview, setPreview] = useState(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [applying, setApplying] = useState(false);
+    const prevOpenRef = useRef(false);
 
     useEffect(() => {
-        if (!open) {
-            return;
+        if (open && !prevOpenRef.current) {
+            setStep('search');
+            setQ('');
+            setItems([]);
+            setError(null);
+            setSelectedNumber('');
+            setPreview(null);
+            setLoading(false);
+            setLoadingPreview(false);
+            setApplying(false);
         }
-        setStep('search');
-        setQ('');
-        setItems([]);
-        setError(null);
-        setSelectedNumber('');
-        setPreview(null);
-        setLoading(false);
-        setLoadingPreview(false);
-        setApplying(false);
+        prevOpenRef.current = open;
     }, [open]);
 
     useEffect(() => {
@@ -100,6 +112,7 @@ export default function CompaniesHouseSearchModal({ open, onClose, onApplyCompan
     const loadPreview = async (companyNumber) => {
         const num = String(companyNumber ?? '').trim();
         if (!num) {
+            setError('Could not read company number for this result. Try searching by company number.');
             return;
         }
         setSelectedNumber(num);
@@ -141,20 +154,24 @@ export default function CompaniesHouseSearchModal({ open, onClose, onApplyCompan
     const co = preview?.company;
 
     const panel = (
-        <div className="fixed inset-0 z-[200]" role="presentation">
+        <div
+            className="fixed inset-0 z-[200] flex items-start justify-center overflow-y-auto p-4 pt-12 sm:pt-16"
+            role="presentation"
+        >
             <button
                 type="button"
-                className="absolute inset-0 block h-full w-full cursor-default border-0 bg-slate-900/50 p-0"
+                className="fixed inset-0 z-0 border-0 bg-slate-900/50 p-0"
                 onClick={onClose}
                 aria-label="Close dialog"
             />
-            <div className="pointer-events-none fixed inset-0 flex items-start justify-center overflow-y-auto p-4 pt-12 sm:pt-16">
-                <div
-                    className="pointer-events-auto mt-0 w-full max-w-2xl rounded-xl bg-white shadow-xl ring-1 ring-slate-200"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="ch-search-title"
-                >
+            <div
+                className="relative z-10 mt-0 w-full max-w-2xl rounded-xl bg-white shadow-xl ring-1 ring-slate-200"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="ch-search-title"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+            >
                     <div className="flex items-center justify-between rounded-t-xl bg-slate-900 px-4 py-3">
                         <h2 id="ch-search-title" className="text-base font-semibold text-white">
                             Search Companies House
@@ -205,30 +222,38 @@ export default function CompaniesHouseSearchModal({ open, onClose, onApplyCompan
                                 {items.length > 0 && (
                                     <ul
                                         className="mt-4 max-h-80 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2"
-                                        role="listbox"
                                         aria-label="Search results"
                                     >
-                                        {items.map((row) => (
-                                            <li key={row.company_number || row.title}>
-                                                <button
-                                                    type="button"
-                                                    role="option"
-                                                    className="group w-full rounded-lg border border-transparent bg-white px-3 py-3 text-left text-sm shadow-sm ring-1 ring-slate-200/80 transition hover:border-brand-600 hover:bg-brand-700 hover:ring-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-60"
-                                                    disabled={loadingPreview}
-                                                    onClick={() => loadPreview(row.company_number)}
+                                        {items.map((row) => {
+                                            const num = companyNumberFromRow(row);
+                                            return (
+                                                <li
+                                                    key={`${num || 'x'}-${row.title}`}
+                                                    className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
                                                 >
-                                                    <div className="font-semibold text-slate-900 group-hover:text-white">
-                                                        {row.title}
+                                                    <div className="min-w-0 flex-1 text-left text-sm">
+                                                        <div className="font-semibold text-slate-900">{row.title}</div>
+                                                        {row.subtitle ? (
+                                                            <div className="mt-0.5 text-xs text-slate-600">
+                                                                {row.subtitle}
+                                                            </div>
+                                                        ) : null}
                                                     </div>
-                                                    {row.subtitle ? (
-                                                        <div className="mt-0.5 text-xs text-slate-600 group-hover:text-white/90">
-                                                            {row.subtitle}
-                                                        </div>
-                                                    ) : null}
-                                                </button>
-                                            </li>
-                                        ))}
+                                                    <button
+                                                        type="button"
+                                                        className="shrink-0 rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50"
+                                                        disabled={loadingPreview || !num}
+                                                        onClick={() => loadPreview(num)}
+                                                    >
+                                                        {loadingPreview ? 'Loading…' : 'View details'}
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
                                     </ul>
+                                )}
+                                {loadingPreview && step === 'search' && (
+                                    <p className="mt-3 text-sm text-slate-600">Loading company from Companies House…</p>
                                 )}
                             </>
                         )}
@@ -387,7 +412,6 @@ export default function CompaniesHouseSearchModal({ open, onClose, onApplyCompan
                         )}
                     </div>
                 </div>
-            </div>
         </div>
     );
 
