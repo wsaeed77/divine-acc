@@ -90,13 +90,24 @@ class ClientTaskSyncService
                 ->where('status', 'active')
                 ->exists();
 
-            if ($hasActive) {
-                continue;
-            }
-
             $periodDate = $this->resolvePeriodDate($type, $client);
             $deadline = $type->deadline_manual ? null : $this->resolveDeadline($type, $client);
             $taskName = $this->buildTaskName($type, $client, $periodDate ?? $deadline);
+
+            if ($hasActive) {
+                Task::query()
+                    ->where('client_id', $client->id)
+                    ->where('task_type_id', $type->id)
+                    ->where('status', 'active')
+                    ->update([
+                        'task_name' => $taskName,
+                        'period_date' => $periodDate,
+                        'deadline_date' => $deadline,
+                        'assignee_id' => $client->manager_id,
+                    ]);
+
+                continue;
+            }
 
             Task::query()->create([
                 'client_id' => $client->id,
@@ -141,6 +152,10 @@ class ClientTaskSyncService
     private function resolvePeriodDate(TaskType $type, Client $client): ?Carbon
     {
         if ($type->slug === 'ch_submission') {
+            return $this->resolveColumn($client, 'accounts_returns', 'accounts_period_end');
+        }
+
+        if (in_array($type->slug, ['accounts_preparation', 'bookkeeping', 'management_accounts'], true)) {
             return $this->resolveColumn($client, 'accounts_returns', 'accounts_period_end');
         }
 
