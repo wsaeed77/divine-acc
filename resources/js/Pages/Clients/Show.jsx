@@ -21,10 +21,10 @@ export default function Show({ client, extended, canDelete }) {
     const { flash } = usePage().props;
     const cd = client.company_detail;
 
-    const deactivate = () => {
+    const deleteClient = () => {
         if (
             !confirm(
-                'Deactivate this client? They will be hidden from default lists but history is kept.'
+                'Permanently delete this client? This cannot be undone. All tasks and linked records for this client will be removed.'
             )
         ) {
             return;
@@ -66,9 +66,9 @@ export default function Show({ client, extended, canDelete }) {
                 <Link href="/clients" className="btn-secondary">
                     Back to list
                 </Link>
-                {canDelete && client.is_active && (
-                    <button type="button" onClick={deactivate} className="btn-secondary text-red-700 ring-red-200 hover:bg-red-50">
-                        Deactivate
+                {canDelete && (
+                    <button type="button" onClick={deleteClient} className="btn-secondary text-red-700 ring-red-200 hover:bg-red-50">
+                        Delete client
                     </button>
                 )}
             </div>

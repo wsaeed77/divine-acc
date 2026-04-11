@@ -252,9 +252,11 @@ class ClientController extends Controller
 
     public function destroy(Request $request, Client $client): RedirectResponse
     {
-        $client->update(['is_active' => false]);
+        DB::transaction(function () use ($client) {
+            $client->delete();
+        });
 
-        return redirect()->route('clients.index')->with('success', 'Client deactivated.');
+        return redirect()->route('clients.index')->with('success', 'Client deleted. All tasks for this client have been removed.');
     }
 
     /**
