@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Models\VatFrequency;
 use App\Models\VatMemberState;
 use App\Services\ClientExtendedDataService;
+use App\Services\ClientTaskSyncService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,7 @@ class ClientController extends Controller
 {
     public function __construct(
         private ClientExtendedDataService $clientExtendedData,
+        private ClientTaskSyncService $clientTaskSync,
     ) {
         $this->authorizeResource(Client::class, 'client');
     }
@@ -147,6 +149,8 @@ class ClientController extends Controller
             return $created;
         });
 
+        $this->clientTaskSync->syncForClient($client->fresh());
+
         if ($request->boolean('onboarding_workflow')) {
             return redirect()->route('clients.show', $client)
                 ->with('success', 'Client created. Continue onboarding using tasks and compliance sections.')
@@ -240,6 +244,8 @@ class ClientController extends Controller
             );
             $this->clientExtendedData->syncFromRequest($request, $client->fresh());
         });
+
+        $this->clientTaskSync->syncForClient($client->fresh());
 
         return redirect()->route('clients.show', $client)->with('success', 'Client updated.');
     }

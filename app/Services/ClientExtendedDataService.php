@@ -23,10 +23,6 @@ use Illuminate\Validation\Rule;
 
 class ClientExtendedDataService
 {
-    public function __construct(
-        private ClientTaskSyncService $clientTaskSync,
-    ) {}
-
     public function ensureBootstrapped(Client $client): void
     {
         if ($client->clientServices()->count() === 0) {
@@ -310,8 +306,6 @@ class ClientExtendedDataService
                 $mainId = $client->fresh()->contacts->firstWhere(fn ($c) => (bool) $c->pivot->is_main_contact)?->id;
                 $this->syncSecondaryContact($client, $tenantId, $validated['secondary_contact'], $mainId);
             }
-
-            $this->clientTaskSync->syncForClient($client->fresh());
         });
     }
 
